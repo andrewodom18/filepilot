@@ -1,59 +1,97 @@
 # FilePilot
 
+[![CI](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/andrewodom18/filepilot?sort=semver)](https://github.com/andrewodom18/filepilot/releases)
+
 FilePilot is a privacy-first, cross-platform file-control suite for macOS, Windows, and Linux. It combines safe file renaming, folder organization, duplicate detection, large-file reporting, and image metadata cleaning in one product.
+
+## v0.1.0
+
+FilePilot v0.1.0 is a local-only command-line application. It does not upload files, collect telemetry, require an account, or delete duplicate files. Rename and organize operations show a complete preview, abort on conflicts, and require confirmation before changing files.
+
+## Install
+
+Download the archive for your platform from the [latest GitHub Release](https://github.com/andrewodom18/filepilot/releases). The first release targets:
+
+- macOS arm64
+- macOS x64
+- Windows x64
+- Linux x64
+
+For development builds, install from the repository with Rust:
+
+```bash
+cargo install --path crates/filepilot-cli
+```
+
+The installed executable is named `filepilot`.
 
 ## Product vision
 
 Make potentially destructive file operations understandable, previewable, and reversible. FilePilot should be useful from the command line first, with an optional graphical interface built on the same core.
 
-## Core modules
+## Quick start
 
-- Bulk file renaming using templates, numbering, dates, and regular expressions.
-- Folder organization by extension, filename, date, or custom rules.
-- Duplicate detection using size filtering and cryptographic hashes.
-- Large-file reporting with sorting, filtering, and CSV/JSON export.
-- Image metadata cleaning for GPS, camera, date, software, thumbnails, or all EXIF data.
-- File search and filtering.
-- Operation history and undo support.
-- Dry-run previews before changes are applied.
-- Optional backups before destructive operations.
+Preview a directory before making changes:
+
+```bash
+filepilot scan ~/Downloads
+filepilot large-files ~/ --top 20
+filepilot duplicates ~/Pictures
+filepilot rename ./photos --pattern "IMG_{date}_{number}{ext}" --dry-run
+filepilot organize ./Downloads --by extension --dry-run
+filepilot clean-metadata ./photos --remove all --dry-run
+```
+
+Read-only reports support `--format human`, `--format json`, and `--format csv`, plus `--output <path>`. Use `--yes` only when running a reviewed rename, organize, or metadata-cleaning operation non-interactively. Metadata cleaning writes new JPEG, PNG, or WebP files and never overwrites the source.
+
+Run the same commands from a checkout with `cargo run -p filepilot-cli -- ...`.
+
+Run validation with:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
+
+## Included in v0.1.0
+
+- Recursive directory scanning with hidden-file, symlink, and exclusion controls.
+- Bulk renaming using templates, numbering, dates, and regular expressions.
+- Folder organization by extension, modified date, or first filename character.
+- Duplicate detection using size filtering, partial hashes, and full hashes.
+- Large-file reporting with stable sorting and CSV/JSON export.
+- JPEG, PNG, and WebP metadata-container removal without recompression.
+- Dry-run previews and preflight conflict detection.
+- Operation logs and undo for rename and organize operations.
 
 ## Example commands
 
 ```text
-filepilot rename ~/Downloads --pattern "IMG_{date}_{number}"
+filepilot scan ~/Downloads
+filepilot rename ~/Downloads --pattern "IMG_{date}_{number}{ext}"
 filepilot organize ~/Downloads --by extension
 filepilot duplicates ~/Pictures
 filepilot large-files ~/ --top 50
-filepilot clean-metadata ~/Pictures --remove-location
+filepilot clean-metadata ~/Pictures --remove all
 filepilot undo
 ```
 
-## MVP
-
-1. Scan a selected directory.
-2. Display a preview of all proposed changes.
-3. Require explicit confirmation before modifying files.
-4. Support dry runs.
-5. Store an operation log for undo.
-6. Ignore hidden files, system folders, symlinks, and excluded paths by default.
-7. Export scan results to JSON or CSV.
-8. Implement the five core modules.
-
-## Safety requirements
+## v1 safety contract
 
 - Never overwrite by default.
 - Detect filename collisions before applying changes.
 - Preserve Unicode filenames.
 - Handle case-sensitive and case-insensitive filesystems safely.
 - Provide clear warnings for permissions, locked files, and symlinks.
-- Move deletions to the system trash/recycle bin when possible.
-- Default the metadata cleaner to creating a cleaned copy rather than changing the original.
+- Duplicate reporting never deletes or moves files.
+- Metadata cleaning creates cleaned copies rather than changing originals.
 - Keep a human-readable audit log for every operation.
 
 ## Technical direction
 
-Rust is a strong candidate for a portable native core and single binaries across the three operating systems. The architecture should separate the core library from the CLI and any future desktop interface.
+Rust provides the portable native core and single binaries across the three operating systems. The architecture separates the reusable core library from the CLI and any future desktop interface.
 
 ```text
 filepilot/
@@ -66,7 +104,18 @@ filepilot/
   packaging/
 ```
 
-The duplicate finder should first group by file size, then use partial hashes for large files, and finally use full hashes before reporting a duplicate. The metadata cleaner should preserve image content and remove only explicitly selected metadata fields.
+The duplicate finder first groups by file size, then uses partial hashes for large files, and finally uses full hashes before reporting a duplicate. The metadata cleaner removes supported metadata containers while preserving the original image data instead of decoding and recompressing it.
+
+## Development
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build --workspace --release
+```
+
+GitHub Actions runs the test suite on Linux, Windows, and both macOS architectures. Tagged releases publish platform archives through GitHub Releases.
 
 ## Future features
 
@@ -91,4 +140,3 @@ The duplicate finder should first group by file size, then use partial hashes fo
 8. Undo/audit system.
 9. Packaging and release automation.
 10. Optional desktop interface.
-
