@@ -29,6 +29,14 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "nsis", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "category": "Utility",
     "shortDescription": "Privacy-first file control for desktop",
     "longDescription": "A local-first desktop app and CLI for safe file renaming, organization, duplicate detection, large-file reports, and image metadata cleaning.",

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">FilePilot</title>
+  <desc id="desc">A line-art folder with a route line</desc>
+  <style>
+    .surface { fill: #fff; stroke: #111; }
+    .line { fill: none; stroke: #111; }
+    @media (prefers-color-scheme: dark) {
+      .surface { fill: #000; stroke: #fff; }
+      .line { stroke: #fff; }
+    }
+  </style>
+  <rect class="surface" x="28" y="28" width="968" height="968" rx="220" stroke-width="20"/>
+  <path class="line" d="M244 416v-78c0-43 35-78 78-78h137l75 78h166c43 0 78 35 78 78v264c0 43-35 78-78 78H322c-43 0-78-35-78-78V416Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="34"/>
+  <path class="line" d="M244 416h534" stroke-linecap="round" stroke-width="34"/>
+  <path class="line" d="M344 652c58 0 51-126 119-126 61 0 50 132 119 132 57 0 57-78 98-78" stroke-linecap="round" stroke-linejoin="round" stroke-width="34"/>
+</svg>

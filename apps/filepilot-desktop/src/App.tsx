@@ -35,6 +35,15 @@ const modules: { id: ModuleId; label: string; icon: string }[] = [
   { id: "settings", label: "Settings", icon: "⚙" },
 ];
 
+function FilePilotMark() {
+  return <svg className="brand-mark" viewBox="0 0 64 64" role="img" aria-label="FilePilot logo">
+    <rect className="brand-mark-surface" x="1.5" y="1.5" width="61" height="61" rx="14" />
+    <path className="brand-mark-line" d="M14 26v-5c0-2.8 2.2-5 5-5h8.6l4.8 5h8.6c2.8 0 5 2.2 5 5v16c0 2.8-2.2 5-5 5H19c-2.8 0-5-2.2-5-5V26Z" />
+    <path className="brand-mark-line" d="M14 26h32" />
+    <path className="brand-mark-line" d="M20 40c3.5 0 3.1-7.7 7.3-7.7 3.7 0 3 8.1 7.3 8.1 3.5 0 3.5-4.8 6-4.8" />
+  </svg>;
+}
+
 type Outputs = Partial<Record<ModuleId, TaskOutput>>;
 
 function moduleForTask(kind: TaskKind): ModuleId {
@@ -178,7 +187,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">✦</span><span>FilePilot</span><small>2.0.0</small></div>
+        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.0.0</small></div>
         <nav aria-label="Main navigation">
           {modules.map((item) => (
             <button key={item.id} className={`nav-item ${activeModule === item.id ? "active" : ""}`} onClick={() => setActiveModule(item.id)}>
