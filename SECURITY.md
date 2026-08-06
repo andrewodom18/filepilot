@@ -13,4 +13,4 @@ Please do not disclose a suspected vulnerability in a public issue. Use GitHub's
 - Reproduction steps or a proof of concept
 - Any suggested mitigation
 
-FilePilot is a local CLI. It does not provide a network service, upload user files, or require credentials. Security reports should still cover path traversal, unintended file modification, unsafe overwrite behavior, symlink handling, metadata leakage, and release-artifact integrity.
+FilePilot is a local desktop app and CLI. It does not provide a network service, upload user files, or require credentials. Security reports should still cover path traversal, unintended file modification, unsafe overwrite behavior, symlink handling, metadata leakage, Tauri capability expansion, frontend-to-Rust command validation, and release-artifact integrity.

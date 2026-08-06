@@ -3,36 +3,46 @@
 [![CI](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/andrewodom18/filepilot?sort=semver)](https://github.com/andrewodom18/filepilot/releases)
 
-FilePilot is a privacy-first, cross-platform file-control suite for macOS, Windows, and Linux. It combines safe file renaming, folder organization, duplicate detection, large-file reporting, and image metadata cleaning in one product.
+FilePilot is a privacy-first desktop app and CLI for safe file control on macOS, Windows, and Linux. Scan storage, find duplicates, preview renames, organize folders, and clean image metadata without uploading files or requiring an account.
 
-## v0.1.0
+## FilePilot 2.0.0
 
-FilePilot v0.1.0 is a local-only command-line application. It does not upload files, collect telemetry, require an account, or delete duplicate files. Rename and organize operations show a complete preview, abort on conflicts, and require confirmation before changing files.
+The v2 desktop app is a local-only Tauri application with a React interface. It shares the same Rust core as the CLI and includes:
 
-## Install
+- Read-only recursive scans with warnings and filtering.
+- Large-file reports with JSON and CSV export.
+- macOS System Data analysis that identifies large user-library, shared-library, and system-working-data contributors with conservative review guidance.
+- Duplicate detection using size grouping, partial hashes, and full hashes.
+- Template and regex batch renaming.
+- Organization by extension, modified date, or filename.
+- JPEG, PNG, and WebP metadata cleaning to new copies.
+- Dry runs, previews, collision checks, staging, audit logs, and undo.
+- Background progress, cancellation for analysis tasks, and a unified Activity view.
 
-Download the archive for your platform from the [latest GitHub Release](https://github.com/andrewodom18/filepilot/releases). The first release targets:
+FilePilot does not include authentication, a server, a database, telemetry, cloud uploads, or an auto-updater. Settings and recent folders are stored locally in platform-standard application data directories.
 
-- macOS arm64
-- macOS x64
-- Windows x64
-- Linux x64
+## Download
 
-For development builds, install from the repository with Rust:
+Download the latest platform installer from [GitHub Releases](https://github.com/andrewodom18/filepilot/releases):
+
+- macOS arm64: `.dmg`
+- macOS x64: `.dmg`
+- Windows x64: NSIS installer `.exe`
+- Linux x64: `.AppImage`
+
+Each release also includes CLI archives and `SHA256SUMS.txt`. macOS and Windows artifacts may show platform security warnings when signing credentials are not configured; verify the checksum and review the release notes before opening an unsigned artifact.
+
+## CLI installation
+
+The CLI remains a first-class interface for scripts and automation. Download its platform archive from the release page or build it locally:
 
 ```bash
 cargo install --path crates/filepilot-cli
 ```
 
-The installed executable is named `filepilot`.
+The executable is named `filepilot`.
 
-## Product vision
-
-Make potentially destructive file operations understandable, previewable, and reversible. FilePilot should be useful from the command line first, with an optional graphical interface built on the same core.
-
-## Quick start
-
-Preview a directory before making changes:
+## CLI quick start
 
 ```bash
 filepilot scan ~/Downloads
@@ -43,100 +53,79 @@ filepilot organize ./Downloads --by extension --dry-run
 filepilot clean-metadata ./photos --remove all --dry-run
 ```
 
-Read-only reports support `--format human`, `--format json`, and `--format csv`, plus `--output <path>`. Use `--yes` only when running a reviewed rename, organize, or metadata-cleaning operation non-interactively. Metadata cleaning writes new JPEG, PNG, or WebP files and never overwrites the source.
+Read-only reports support `--format human`, `--format json`, and `--format csv`, plus `--output <path>`. Use `--yes` only after reviewing a rename, organization, or metadata-cleaning preview. Metadata cleaning writes new copies and never overwrites the source.
 
-Run the same commands from a checkout with `cargo run -p filepilot-cli -- ...`.
+## Desktop development
 
-Run validation with:
+Requirements:
+
+- Rust stable
+- Node.js 20 or newer
+- Tauri 2 platform prerequisites
+
+Start the desktop app from the repository root:
+
+```bash
+cd apps/filepilot-desktop
+npm install
+npm run tauri:dev
+```
+
+Run the frontend checks:
+
+```bash
+npm test
+npm run build
+```
+
+Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is under `apps/filepilot-desktop/src-tauri`; reusable filesystem behavior remains in `crates/filepilot-core`, and desktop task/settings services live in `crates/filepilot-app`.
+
+## Safety contract
+
+- Never overwrite by default.
+- Preview and preflight every mutating batch before it starts.
+- Abort before mutation when a collision, invalid path, or stale source is detected.
+- Stage rename and organization batches so swaps are safe.
+- Do not follow symlinks by default.
+- Keep originals intact during metadata cleaning.
+- Report permission failures as warnings where possible.
+- Duplicate detection never deletes or moves files.
+- Disable cancellation once a mutation batch begins.
+- Keep an operation log and refuse unsafe undo when a destination changed.
+- Keep System Data analysis read-only; it never deletes caches, backups, system files, snapshots, or personal data.
+
+## Privacy and security
+
+FilePilot is designed for local-only use. The desktop UI does not request arbitrary frontend filesystem access, shell execution, network access, or remote content. Rust validates all paths and operations before touching files. See [SECURITY.md](SECURITY.md) for reporting guidance.
+
+## Validation
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cd apps/filepilot-desktop
+npm test
+npm run build
 ```
 
-## Included in v0.1.0
+GitHub Actions runs Rust and frontend checks on Linux, Windows, and both macOS runner targets. Tagged releases build desktop installers, CLI archives, and checksums for the supported architectures.
 
-- Recursive directory scanning with hidden-file, symlink, and exclusion controls.
-- Bulk renaming using templates, numbering, dates, and regular expressions.
-- Folder organization by extension, modified date, or first filename character.
-- Duplicate detection using size filtering, partial hashes, and full hashes.
-- Large-file reporting with stable sorting and CSV/JSON export.
-- JPEG, PNG, and WebP metadata-container removal without recompression.
-- Dry-run previews and preflight conflict detection.
-- Operation logs and undo for rename and organize operations.
-
-## Example commands
-
-```text
-filepilot scan ~/Downloads
-filepilot rename ~/Downloads --pattern "IMG_{date}_{number}{ext}"
-filepilot organize ~/Downloads --by extension
-filepilot duplicates ~/Pictures
-filepilot large-files ~/ --top 50
-filepilot clean-metadata ~/Pictures --remove all
-filepilot undo
-```
-
-## v1 safety contract
-
-- Never overwrite by default.
-- Detect filename collisions before applying changes.
-- Preserve Unicode filenames.
-- Handle case-sensitive and case-insensitive filesystems safely.
-- Provide clear warnings for permissions, locked files, and symlinks.
-- Duplicate reporting never deletes or moves files.
-- Metadata cleaning creates cleaned copies rather than changing originals.
-- Keep a human-readable audit log for every operation.
-
-## Technical direction
-
-Rust provides the portable native core and single binaries across the three operating systems. The architecture separates the reusable core library from the CLI and any future desktop interface.
+## Repository layout
 
 ```text
 filepilot/
-  core/
-  cli/
-  desktop/
-  rules/
-  tests/
-  docs/
-  packaging/
+├── apps/filepilot-desktop/       # Tauri 2 shell and React UI
+├── crates/filepilot-app/         # background tasks, settings, UI DTOs
+├── crates/filepilot-core/        # terminal-independent filesystem engine
+└── crates/filepilot-cli/         # first-class command-line interface
 ```
 
-The duplicate finder first groups by file size, then uses partial hashes for large files, and finally uses full hashes before reporting a duplicate. The metadata cleaner removes supported metadata containers while preserving the original image data instead of decoding and recompressing it.
+## Roadmap
 
-## Development
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --workspace --release
-```
-
-GitHub Actions runs the test suite on Linux, Windows, and both macOS architectures. Tagged releases publish platform archives through GitHub Releases.
-
-## Future features
-
-- Watch folders automatically.
-- Add a graphical drag-and-drop interface.
-- Schedule recurring cleanup jobs.
-- Support duplicate deletion to the system trash.
-- Add file tagging.
-- Support cloud-storage folders.
-- Add saved cleanup profiles.
-- Add Finder, Explorer, and Linux file-manager integrations.
-
-## Planned build order
-
-1. Cross-platform path and file-operation library.
-2. Read-only directory scanner.
-3. Large-file reporter.
-4. Duplicate finder.
-5. Rename preview and execution.
-6. Rule-based folder organizer.
-7. Metadata cleaner.
-8. Undo/audit system.
-9. Packaging and release automation.
-10. Optional desktop interface.
+- Watch folders and scheduled workflows.
+- Safe, user-confirmed cleanup actions for clearly understood cache and temporary-data categories.
+- Saved cleanup profiles.
+- Optional duplicate actions to the system trash.
+- File tagging and file-manager integrations.
+- Signed release artifacts and an opt-in updater after the desktop release is stable.
