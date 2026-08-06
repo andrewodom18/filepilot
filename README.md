@@ -11,7 +11,7 @@ The v2 desktop app is a local-only Tauri application with a React interface. It 
 
 - Read-only recursive scans with warnings and filtering.
 - Large-file reports with JSON and CSV export.
-- macOS System Data analysis that identifies large user-library, shared-library, and system-working-data contributors with conservative review guidance.
+- macOS System Data analysis that identifies large user-library, shared-library, and system-working-data contributors, with constrained Trash cleanup for selected user cache and log entries.
 - Duplicate detection using size grouping, partial hashes, and full hashes.
 - Template and regex batch renaming.
 - Organization by extension, modified date, or filename.
@@ -84,6 +84,7 @@ Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is unde
 
 - Never overwrite by default.
 - Preview and preflight every mutating batch before it starts.
+- Ask for explicit confirmation immediately before every desktop mutation, including undo and Trash cleanup.
 - Abort before mutation when a collision, invalid path, or stale source is detected.
 - Stage rename and organization batches so swaps are safe.
 - Do not follow symlinks by default.
@@ -92,7 +93,7 @@ Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is unde
 - Duplicate detection never deletes or moves files.
 - Disable cancellation once a mutation batch begins.
 - Keep an operation log and refuse unsafe undo when a destination changed.
-- Keep System Data analysis read-only; it never deletes caches, backups, system files, snapshots, or personal data.
+- Keep System Data analysis read-only by default; optional cleanup only moves explicitly selected direct children of the current user's cache or log folders to the system Trash and never touches backups, system files, snapshots, or personal data.
 
 ## Privacy and security
 
@@ -107,6 +108,7 @@ cargo test --workspace
 cd apps/filepilot-desktop
 npm test
 npm run build
+npm run tauri:build -- --no-bundle
 ```
 
 GitHub Actions runs Rust and frontend checks on Linux, Windows, and both macOS runner targets. Tagged releases build desktop installers, CLI archives, and checksums for the supported architectures.

@@ -38,11 +38,20 @@ jobs:
         working-directory: apps/filepilot-desktop
         run: npm ci
 
+      - name: Install Linux desktop libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Run tests
         run: cargo test --workspace
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test desktop UI
         working-directory: apps/filepilot-desktop
@@ -51,3 +60,7 @@ jobs:
       - name: Build desktop UI
         working-directory: apps/filepilot-desktop
         run: npm run build
+
+      - name: Build Tauri application
+        working-directory: apps/filepilot-desktop
+        run: npm run tauri:build -- --no-bundle
