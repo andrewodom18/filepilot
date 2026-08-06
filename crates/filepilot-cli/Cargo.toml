@@ -1,0 +1,21 @@
+[package]
+name = "filepilot-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI for the FilePilot file-control suite"
+
+[[bin]]
+name = "filepilot"
+path = "src/main.rs"
+
+[dependencies]
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+csv = "1"
+filepilot-core = { path = "../filepilot-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+

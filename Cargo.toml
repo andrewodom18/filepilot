@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "crates/filepilot-core",
+    "crates/filepilot-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/andrewodom18/filepilot"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
