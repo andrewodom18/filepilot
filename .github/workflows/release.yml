@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish assets for"
+        required: true
+        type: string
 
 jobs:
   build:
@@ -83,5 +89,5 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: dist/*
-
