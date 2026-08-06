@@ -7,7 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{FilePilotError, FileRecord, Result, ScanResult};
+use crate::{FilePilotError, FileRecord, OperationContext, ProgressEvent, Result, ScanResult};
 
 const PARTIAL_HASH_CHUNK: usize = 1024 * 1024;
 
@@ -27,9 +27,32 @@ pub struct DuplicateGroup {
 }
 
 pub fn large_files(scan: &ScanResult, top: usize, min_size: u64) -> Vec<LargeFileEntry> {
+    large_files_with_context(scan, top, min_size, &OperationContext::default())
+}
+
+pub fn large_files_with_context(
+    scan: &ScanResult,
+    top: usize,
+    min_size: u64,
+    context: &OperationContext,
+) -> Vec<LargeFileEntry> {
     let mut entries: Vec<_> = scan
         .files
         .iter()
+        .enumerate()
+        .filter_map(|(index, file)| {
+            if context.cancellation.is_cancelled() {
+                return None;
+            }
+            context.report(ProgressEvent {
+                phase: "reporting large files".to_string(),
+                completed: index as u64 + 1,
+                total: Some(scan.files.len() as u64),
+                current_path: Some(file.path.clone()),
+                message: None,
+            });
+            Some(file)
+        })
         .filter(|file| file.size_bytes >= min_size)
         .map(|file| LargeFileEntry {
             path: file.path.clone(),
@@ -52,6 +75,13 @@ pub fn large_files(scan: &ScanResult, top: usize, min_size: u64) -> Vec<LargeFil
 }
 
 pub fn duplicate_files(scan: &ScanResult) -> Result<Vec<DuplicateGroup>> {
+    duplicate_files_with_context(scan, &OperationContext::default())
+}
+
+pub fn duplicate_files_with_context(
+    scan: &ScanResult,
+    context: &OperationContext,
+) -> Result<Vec<DuplicateGroup>> {
     let mut by_size: BTreeMap<u64, Vec<&FileRecord>> = BTreeMap::new();
     for file in &scan.files {
         by_size.entry(file.size_bytes).or_default().push(file);
@@ -64,8 +94,16 @@ pub fn duplicate_files(scan: &ScanResult) -> Result<Vec<DuplicateGroup>> {
         }
 
         let mut by_partial_hash: HashMap<String, Vec<&FileRecord>> = HashMap::new();
-        for candidate in candidates {
-            let hash = hash_file(&candidate.path, true)?;
+        for (index, candidate) in candidates.into_iter().enumerate() {
+            context.cancellation.check()?;
+            context.report(ProgressEvent {
+                phase: "hashing duplicates".to_string(),
+                completed: index as u64 + 1,
+                total: None,
+                current_path: Some(candidate.path.clone()),
+                message: None,
+            });
+            let hash = hash_file(&candidate.path, true, context)?;
             by_partial_hash.entry(hash).or_default().push(candidate);
         }
 
@@ -76,7 +114,8 @@ pub fn duplicate_files(scan: &ScanResult) -> Result<Vec<DuplicateGroup>> {
 
             let mut by_full_hash: HashMap<String, Vec<PathBuf>> = HashMap::new();
             for candidate in partial_candidates {
-                let hash = hash_file(&candidate.path, false)?;
+                context.cancellation.check()?;
+                let hash = hash_file(&candidate.path, false, context)?;
                 by_full_hash
                     .entry(hash)
                     .or_default()
@@ -110,7 +149,7 @@ pub fn duplicate_files(scan: &ScanResult) -> Result<Vec<DuplicateGroup>> {
     Ok(groups)
 }
 
-fn hash_file(path: &Path, partial: bool) -> Result<String> {
+fn hash_file(path: &Path, partial: bool, context: &OperationContext) -> Result<String> {
     let mut file = File::open(path)?;
     let metadata = file.metadata()?;
     let mut hasher = blake3::Hasher::new();
@@ -118,6 +157,7 @@ fn hash_file(path: &Path, partial: bool) -> Result<String> {
     if !partial || metadata.len() <= (PARTIAL_HASH_CHUNK * 2) as u64 {
         let mut buffer = [0_u8; 1024 * 64];
         loop {
+            context.cancellation.check()?;
             let read = file.read(&mut buffer)?;
             if read == 0 {
                 break;
@@ -126,11 +166,13 @@ fn hash_file(path: &Path, partial: bool) -> Result<String> {
         }
     } else {
         let mut first = vec![0_u8; PARTIAL_HASH_CHUNK];
+        context.cancellation.check()?;
         file.read_exact(&mut first)?;
         hasher.update(&first);
 
         file.seek(SeekFrom::End(-(PARTIAL_HASH_CHUNK as i64)))?;
         let mut last = vec![0_u8; PARTIAL_HASH_CHUNK];
+        context.cancellation.check()?;
         file.read_exact(&mut last)?;
         hasher.update(&last);
     }

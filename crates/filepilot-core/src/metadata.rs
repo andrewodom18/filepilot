@@ -6,7 +6,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{scan, FilePilotError, Result, ScanOptions};
+use crate::{
+    scan_with_context, FilePilotError, OperationContext, ProgressEvent, Result, ScanOptions,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CleanMetadataResult {
@@ -27,7 +29,23 @@ pub fn clean_images(
     scan_options: &ScanOptions,
     dry_run: bool,
 ) -> Result<CleanMetadataResult> {
-    let scan_result = scan(root.as_ref(), scan_options)?;
+    clean_images_with_context(
+        root,
+        output_directory,
+        scan_options,
+        dry_run,
+        &OperationContext::default(),
+    )
+}
+
+pub fn clean_images_with_context(
+    root: impl AsRef<Path>,
+    output_directory: Option<&Path>,
+    scan_options: &ScanOptions,
+    dry_run: bool,
+    context: &OperationContext,
+) -> Result<CleanMetadataResult> {
+    let scan_result = scan_with_context(root.as_ref(), scan_options, context)?;
     let output_root = match output_directory {
         Some(directory) => absolute_output_path(directory)?,
         None => default_output_directory(&scan_result.root),
@@ -46,7 +64,15 @@ pub fn clean_images(
         .map(|warning| warning.message.clone())
         .collect::<Vec<_>>();
 
-    for file in scan_result.files {
+    for (index, file) in scan_result.files.into_iter().enumerate() {
+        context.cancellation.check()?;
+        context.report(ProgressEvent {
+            phase: "preparing metadata cleaning".to_string(),
+            completed: index as u64 + 1,
+            total: None,
+            current_path: Some(file.path.clone()),
+            message: None,
+        });
         let Some(format) = image_format(file.extension.as_deref()) else {
             warnings.push(format!("unsupported image format: {}", file.path.display()));
             continue;
@@ -77,6 +103,7 @@ pub fn clean_images(
         }
     }
 
+    context.cancellation.check()?;
     let mut prepared = Vec::new();
     for (source, destination, format) in candidates {
         let bytes = if dry_run {

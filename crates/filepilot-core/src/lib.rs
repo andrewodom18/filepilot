@@ -2,17 +2,24 @@
 
 mod metadata;
 mod operations;
+mod progress;
 mod reports;
 mod scan;
 mod storage;
 
-pub use metadata::{clean_images, CleanMetadataResult, CleanedImage};
+pub use metadata::{clean_images, clean_images_with_context, CleanMetadataResult, CleanedImage};
 pub use operations::{
-    apply_operation, build_organize_plan, build_rename_plan, undo_operation, OperationAction,
-    OperationKind, OperationPlan, OperationRecord, OperationResult, OrganizeBy, RenameOptions,
+    apply_operation, apply_operation_with_context, build_organize_plan,
+    build_organize_plan_with_context, build_rename_plan, build_rename_plan_with_context,
+    list_operations, undo_operation, undo_operation_with_context, OperationAction, OperationKind,
+    OperationPlan, OperationRecord, OperationResult, OrganizeBy, RenameOptions,
 };
-pub use reports::{duplicate_files, large_files, DuplicateGroup, LargeFileEntry};
-pub use scan::{scan, FileRecord, ScanOptions, ScanResult, ScanWarning};
+pub use progress::{CancellationToken, OperationContext, ProgressEvent, ProgressReporter};
+pub use reports::{
+    duplicate_files, duplicate_files_with_context, large_files, large_files_with_context,
+    DuplicateGroup, LargeFileEntry,
+};
+pub use scan::{scan, scan_with_context, FileRecord, ScanOptions, ScanResult, ScanWarning};
 
 use std::{io, path::PathBuf};
 
@@ -45,4 +52,7 @@ pub enum FilePilotError {
 
     #[error("operation cannot be undone: {0}")]
     UndoRefused(String),
+
+    #[error("operation was cancelled")]
+    Cancelled,
 }

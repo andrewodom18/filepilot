@@ -2,7 +2,8 @@ use std::fs;
 
 use filepilot_core::{
     apply_operation, build_organize_plan, build_rename_plan, clean_images, duplicate_files,
-    large_files, scan, OrganizeBy, RenameOptions, ScanOptions,
+    large_files, scan, scan_with_context, CancellationToken, OperationContext, OrganizeBy,
+    RenameOptions, ScanOptions,
 };
 use image::{DynamicImage, ImageFormat, Rgb};
 use tempfile::tempdir;
@@ -201,4 +202,21 @@ fn metadata_cleaner_creates_output_without_touching_source() {
     assert_eq!(result.cleaned.len(), 1);
     assert!(output.join("image.png").exists());
     assert!(source.exists());
+}
+
+#[test]
+fn cancelled_scan_stops_before_touching_files() {
+    let directory = tempdir().unwrap();
+    write_file(&directory.path().join("file.txt"), b"contents");
+    let context = OperationContext::default();
+    let token: CancellationToken = context.cancellation.clone();
+    token.cancel();
+
+    let result = scan_with_context(directory.path(), &ScanOptions::default(), &context);
+
+    assert!(matches!(
+        result,
+        Err(filepilot_core::FilePilotError::Cancelled)
+    ));
+    assert!(directory.path().join("file.txt").exists());
 }

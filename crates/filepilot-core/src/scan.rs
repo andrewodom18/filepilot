@@ -9,7 +9,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use walkdir::{DirEntry, WalkDir};
 
-use crate::{FilePilotError, Result};
+use crate::{FilePilotError, OperationContext, ProgressEvent, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanOptions {
@@ -56,6 +56,14 @@ pub struct ScanResult {
 }
 
 pub fn scan(root: impl AsRef<Path>, options: &ScanOptions) -> Result<ScanResult> {
+    scan_with_context(root, options, &OperationContext::default())
+}
+
+pub fn scan_with_context(
+    root: impl AsRef<Path>,
+    options: &ScanOptions,
+    context: &OperationContext,
+) -> Result<ScanResult> {
     let root = absolute_path(root.as_ref())?;
     let metadata = fs::symlink_metadata(&root)?;
     let excludes = build_excludes(&options.excludes)?;
@@ -79,6 +87,7 @@ pub fn scan(root: impl AsRef<Path>, options: &ScanOptions) -> Result<ScanResult>
             .into_iter();
 
         for entry in walker {
+            context.cancellation.check()?;
             match entry {
                 Ok(entry) => {
                     if entry.path() == root || entry.file_type().is_dir() {
@@ -95,7 +104,17 @@ pub fn scan(root: impl AsRef<Path>, options: &ScanOptions) -> Result<ScanResult>
                     }
 
                     match file_record(entry.path(), &root, is_symlink) {
-                        Ok(record) => files.push(record),
+                        Ok(record) => {
+                            let completed = files.len() as u64 + 1;
+                            context.report(ProgressEvent {
+                                phase: "scanning".to_string(),
+                                completed,
+                                total: None,
+                                current_path: Some(record.path.clone()),
+                                message: None,
+                            });
+                            files.push(record)
+                        }
                         Err(error) => warnings.push(ScanWarning {
                             path: Some(entry.path().to_path_buf()),
                             kind: "metadata".to_string(),

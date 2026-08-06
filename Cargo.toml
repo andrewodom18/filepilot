@@ -1,12 +1,14 @@
 [workspace]
 members = [
+    "crates/filepilot-app",
     "crates/filepilot-core",
     "crates/filepilot-cli",
+    "apps/filepilot-desktop/src-tauri",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/andrewodom18/filepilot"
@@ -15,4 +17,3 @@ repository = "https://github.com/andrewodom18/filepilot"
 lto = true
 codegen-units = 1
 strip = true
-

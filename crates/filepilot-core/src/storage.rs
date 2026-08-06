@@ -72,6 +72,24 @@ pub fn latest_operation_id() -> Result<Option<String>> {
         .map(str::to_string))
 }
 
+pub fn list_operations() -> Result<Vec<OperationRecord>> {
+    let directory = operations_directory()?;
+    let mut records = Vec::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        let bytes = fs::read(path)?;
+        if let Ok(record) = serde_json::from_slice::<OperationRecord>(&bytes) {
+            records.push(record);
+        }
+    }
+    records.sort_by_key(|record| std::cmp::Reverse(record.completed_at));
+    Ok(records)
+}
+
 #[allow(dead_code)]
 fn _operation_file(path: &Path) -> bool {
     path.extension().and_then(|extension| extension.to_str()) == Some("json")

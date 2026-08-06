@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::storage;
-use crate::{scan, FilePilotError, FileRecord, Result, ScanOptions};
+use crate::{
+    scan_with_context, FilePilotError, FileRecord, OperationContext, ProgressEvent, Result,
+    ScanOptions,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationKind {
@@ -19,6 +22,7 @@ pub enum OperationKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum OrganizeBy {
     Extension,
     Date,
@@ -76,8 +80,17 @@ pub fn build_rename_plan(
     scan_options: &ScanOptions,
     options: &RenameOptions,
 ) -> Result<OperationPlan> {
+    build_rename_plan_with_context(root, scan_options, options, &OperationContext::default())
+}
+
+pub fn build_rename_plan_with_context(
+    root: impl AsRef<Path>,
+    scan_options: &ScanOptions,
+    options: &RenameOptions,
+    context: &OperationContext,
+) -> Result<OperationPlan> {
     validate_rename_options(options)?;
-    let scan_result = scan(root.as_ref(), scan_options)?;
+    let scan_result = scan_with_context(root.as_ref(), scan_options, context)?;
     let mut actions = Vec::new();
     let mut skipped = scan_result
         .warnings
@@ -86,6 +99,14 @@ pub fn build_rename_plan(
         .collect::<Vec<_>>();
 
     for (index, file) in scan_result.files.iter().enumerate() {
+        context.cancellation.check()?;
+        context.report(ProgressEvent {
+            phase: "planning rename".to_string(),
+            completed: index as u64 + 1,
+            total: Some(scan_result.files.len() as u64),
+            current_path: Some(file.path.clone()),
+            message: None,
+        });
         let destination_name = render_destination_name(file, index + 1, options)?;
         ensure_safe_filename(&destination_name)?;
         let destination = file
@@ -120,7 +141,21 @@ pub fn build_organize_plan(
     scan_options: &ScanOptions,
     organize_by: OrganizeBy,
 ) -> Result<OperationPlan> {
-    let scan_result = scan(root.as_ref(), scan_options)?;
+    build_organize_plan_with_context(
+        root,
+        scan_options,
+        organize_by,
+        &OperationContext::default(),
+    )
+}
+
+pub fn build_organize_plan_with_context(
+    root: impl AsRef<Path>,
+    scan_options: &ScanOptions,
+    organize_by: OrganizeBy,
+    context: &OperationContext,
+) -> Result<OperationPlan> {
+    let scan_result = scan_with_context(root.as_ref(), scan_options, context)?;
     if !scan_result.root.is_dir() {
         return Err(FilePilotError::InvalidInput(
             "organize requires a directory root".to_string(),
@@ -134,7 +169,15 @@ pub fn build_organize_plan(
         .map(|warning| warning.message.clone())
         .collect::<Vec<_>>();
 
-    for file in &scan_result.files {
+    for (index, file) in scan_result.files.iter().enumerate() {
+        context.cancellation.check()?;
+        context.report(ProgressEvent {
+            phase: "planning organization".to_string(),
+            completed: index as u64 + 1,
+            total: Some(scan_result.files.len() as u64),
+            current_path: Some(file.path.clone()),
+            message: None,
+        });
         let bucket = organization_bucket(file, organize_by);
         let destination = scan_result.root.join(bucket).join(
             file.path
@@ -164,7 +207,16 @@ pub fn build_organize_plan(
 }
 
 pub fn apply_operation(plan: &OperationPlan, dry_run: bool) -> Result<OperationResult> {
+    apply_operation_with_context(plan, dry_run, &OperationContext::default())
+}
+
+pub fn apply_operation_with_context(
+    plan: &OperationPlan,
+    dry_run: bool,
+    context: &OperationContext,
+) -> Result<OperationResult> {
     validate_actions(&plan.actions)?;
+    context.cancellation.check()?;
 
     if dry_run {
         return Ok(OperationResult {
@@ -177,6 +229,13 @@ pub fn apply_operation(plan: &OperationPlan, dry_run: bool) -> Result<OperationR
         });
     }
 
+    context.report(ProgressEvent {
+        phase: "applying operation".to_string(),
+        completed: 0,
+        total: Some(plan.actions.len() as u64),
+        current_path: None,
+        message: Some("Mutation batch started; cancellation is disabled until completion.".into()),
+    });
     execute_actions(&plan.actions, &plan.root)?;
     let record = OperationRecord {
         id: plan.id.clone(),
@@ -206,6 +265,13 @@ pub fn apply_operation(plan: &OperationPlan, dry_run: bool) -> Result<OperationR
 }
 
 pub fn undo_operation(operation_id: Option<&str>) -> Result<OperationResult> {
+    undo_operation_with_context(operation_id, &OperationContext::default())
+}
+
+pub fn undo_operation_with_context(
+    operation_id: Option<&str>,
+    context: &OperationContext,
+) -> Result<OperationResult> {
     let id = match operation_id {
         Some(id) => id.to_string(),
         None => storage::latest_operation_id()?.ok_or_else(|| {
@@ -213,6 +279,7 @@ pub fn undo_operation(operation_id: Option<&str>) -> Result<OperationResult> {
         })?,
     };
     let mut record = storage::load_operation(&id)?;
+    context.cancellation.check()?;
 
     if record.undone_at.is_some() {
         return Err(FilePilotError::UndoRefused(format!(
@@ -251,6 +318,13 @@ pub fn undo_operation(operation_id: Option<&str>) -> Result<OperationResult> {
             size_bytes: action.size_bytes,
         })
         .collect();
+    context.report(ProgressEvent {
+        phase: "undoing operation".to_string(),
+        completed: 0,
+        total: Some(reverse_actions.len() as u64),
+        current_path: None,
+        message: Some("Undo batch started; cancellation is disabled until completion.".into()),
+    });
     execute_actions(&reverse_actions, &record.root)?;
 
     record.undone_at = Some(Utc::now());
@@ -269,6 +343,10 @@ pub fn undo_operation(operation_id: Option<&str>) -> Result<OperationResult> {
         skipped: Vec::new(),
         warnings,
     })
+}
+
+pub fn list_operations() -> Result<Vec<OperationRecord>> {
+    storage::list_operations()
 }
 
 fn new_plan(
@@ -409,6 +487,13 @@ fn validate_actions(actions: &[OperationAction]) -> Result<()> {
     for action in actions {
         if !action.source.is_file() {
             return Err(FilePilotError::InvalidPath(action.source.clone()));
+        }
+        let current_size = fs::metadata(&action.source)?.len();
+        if current_size != action.size_bytes {
+            return Err(FilePilotError::Conflict(format!(
+                "source changed since preview: {}",
+                action.source.display()
+            )));
         }
         let destination_key = path_key(&action.destination);
         if !destinations.insert(destination_key.clone()) {
