@@ -140,7 +140,7 @@ jobs:
           Get-ChildItem -Path target/${{ matrix.target }}/release/bundle -Recurse -Include *.exe,*.msi | Copy-Item -Destination release-assets
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: filepilot-${{ matrix.name }}
           path: release-assets/*
