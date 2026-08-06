@@ -15,7 +15,10 @@ use uuid::Uuid;
 
 mod system_data;
 
-pub use system_data::{analyze_system_data, StorageAssessment, StorageItem, StorageReport};
+pub use system_data::{
+    analyze_system_data, analyze_system_data_location, cleanup_system_data_path, CleanupResult,
+    StorageAssessment, StorageItem, StorageReport, VolumeInfo,
+};
 
 pub type TaskId = String;
 
@@ -99,6 +102,7 @@ pub enum TaskKind {
     LargeFiles,
     Duplicates,
     SystemData,
+    CleanupSystemData,
     RenamePreview,
     OrganizePreview,
     MetadataPreview,
@@ -139,6 +143,7 @@ pub enum TaskOutput {
         warnings: Vec<ScanWarning>,
     },
     SystemData(StorageReport),
+    Cleanup(CleanupResult),
     OperationPlan(OperationPlan),
     Metadata(CleanMetadataResult),
     Operation(OperationResult),

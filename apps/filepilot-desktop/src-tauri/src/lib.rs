@@ -17,6 +17,7 @@ pub fn run() {
             commands::start_large_files,
             commands::start_duplicates,
             commands::start_system_data,
+            commands::cleanup_system_data,
             commands::preview_rename,
             commands::preview_organize,
             commands::preview_metadata,

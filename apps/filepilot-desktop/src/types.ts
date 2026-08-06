@@ -95,6 +95,8 @@ export interface StorageItem {
   path: string;
   sizeBytes: number;
   sizeKnown: boolean;
+  isDirectory: boolean;
+  cleanupAllowed: boolean;
   assessment: StorageAssessment;
   reason: string;
   recommendation: string;
@@ -105,9 +107,24 @@ export interface StorageReport {
   platform: string;
   generatedAt: string;
   totalBytes: number;
+  scopePath?: string;
+  volume?: VolumeInfo;
   items: StorageItem[];
   warnings: string[];
   notes: string[];
+}
+
+export interface VolumeInfo {
+  usedBytes?: number;
+  totalBytes?: number;
+  freeBytes?: number;
+  apfsSnapshotCount: number;
+}
+
+export interface CleanupResult {
+  path: string;
+  sizeBytes: number;
+  destination: string;
 }
 
 export interface OperationRecord {
@@ -133,6 +150,7 @@ export type TaskKind =
   | "large-files"
   | "duplicates"
   | "system-data"
+  | "cleanup-system-data"
   | "rename-preview"
   | "organize-preview"
   | "metadata-preview"
@@ -147,6 +165,7 @@ export type TaskOutput =
   | { type: "largeFiles"; data: { entries: LargeFileEntry[]; warnings: ScanWarning[] } }
   | { type: "duplicates"; data: { groups: DuplicateGroup[]; warnings: ScanWarning[] } }
   | { type: "systemData"; data: StorageReport }
+  | { type: "cleanup"; data: CleanupResult }
   | { type: "operationPlan"; data: OperationPlan }
   | { type: "metadata"; data: CleanMetadataResult }
   | { type: "operation"; data: OperationResult }

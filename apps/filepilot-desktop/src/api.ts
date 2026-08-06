@@ -22,8 +22,10 @@ export const api = {
     }),
   startDuplicates: (path: string, options: ScanOptions) =>
     invoke<TaskId>("start_duplicates", { request: { path, options } }),
-  startSystemData: (deep = true) =>
-    invoke<TaskId>("start_system_data", { request: { deep } }),
+  startSystemData: (deep = true, path?: string) =>
+    invoke<TaskId>("start_system_data", { request: { deep, path } }),
+  cleanupSystemData: (path: string, expectedSize: number) =>
+    invoke<TaskId>("cleanup_system_data", { request: { path, expectedSize } }),
   previewRename: (path: string, scanOptions: ScanOptions, options: object) =>
     invoke<TaskId>("preview_rename", {
       request: { path, scanOptions, options },
