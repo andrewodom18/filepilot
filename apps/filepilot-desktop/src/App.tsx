@@ -82,14 +82,14 @@ export default function App() {
         if (payload.output.type === "metadata" && payload.kind === "metadata-preview") {
           setMetadataPreview(payload.output.data);
         }
-        if (payload.output.type === "cleanup") {
-          setNotice(`Moved ${payload.output.data.path} to the system Trash`);
-        }
       }
       if (payload.taskId === activeTaskRef.current && payload.status !== "running") {
         if (payload.status === "completed") setNotice("Task completed");
         if (payload.status === "cancelled") setNotice("Task cancelled safely");
         if (payload.status === "failed") setError(payload.error ?? "Task failed");
+      }
+      if (payload.status === "completed" && payload.output?.type === "cleanup") {
+        setNotice(`Moved ${payload.output.data.path} to the system Trash`);
       }
     }).then((cleanup) => { unlisten = cleanup; }).catch((reason) => setError(String(reason)));
 
