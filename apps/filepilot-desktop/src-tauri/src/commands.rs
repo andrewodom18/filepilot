@@ -6,8 +6,9 @@ use std::{
 };
 
 use filepilot_app::{
-    analyze_system_data, analyze_system_data_location, cleanup_system_data_path, AppError,
-    AppSettings, SettingsStore, TaskId, TaskKind, TaskOutput, TaskRegistry, TaskSnapshot,
+    analyze_system_data, analyze_system_data_location, cleanup_duplicate_files,
+    cleanup_system_data_path, AppError, AppSettings, DuplicateCleanupCandidate, SettingsStore,
+    TaskId, TaskKind, TaskOutput, TaskRegistry, TaskSnapshot,
 };
 use filepilot_core::{
     apply_operation_with_context, build_organize_plan_with_context, build_rename_plan_with_context,
@@ -71,6 +72,12 @@ pub struct SystemDataRequest {
 pub struct CleanupSystemDataRequest {
     pub path: PathBuf,
     pub expected_size: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupDuplicatesRequest {
+    pub candidates: Vec<DuplicateCleanupCandidate>,
 }
 
 fn default_true() -> bool {
@@ -311,6 +318,20 @@ pub fn cleanup_system_data(
             &context,
             &request.path,
             request.expected_size,
+        )?))
+    })
+}
+
+#[tauri::command]
+pub fn cleanup_duplicates(
+    request: CleanupDuplicatesRequest,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TaskId, String> {
+    start_task(app, &state, TaskKind::CleanupDuplicates, move |context| {
+        Ok(TaskOutput::DuplicateCleanup(cleanup_duplicate_files(
+            &context,
+            &request.candidates,
         )?))
     })
 }

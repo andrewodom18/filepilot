@@ -78,6 +78,17 @@ pub fn duplicate_files(scan: &ScanResult) -> Result<Vec<DuplicateGroup>> {
     duplicate_files_with_context(scan, &OperationContext::default())
 }
 
+pub fn file_hash(path: impl AsRef<Path>) -> Result<String> {
+    file_hash_with_context(path, &OperationContext::default())
+}
+
+pub fn file_hash_with_context(
+    path: impl AsRef<Path>,
+    context: &OperationContext,
+) -> Result<String> {
+    hash_file(path.as_ref(), false, context)
+}
+
 pub fn duplicate_files_with_context(
     scan: &ScanResult,
     context: &OperationContext,

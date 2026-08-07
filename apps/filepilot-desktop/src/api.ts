@@ -22,6 +22,8 @@ export const api = {
     }),
   startDuplicates: (path: string, options: ScanOptions) =>
     invoke<TaskId>("start_duplicates", { request: { path, options } }),
+  cleanupDuplicates: (candidates: import("./types").DuplicateCleanupCandidate[]) =>
+    invoke<TaskId>("cleanup_duplicates", { request: { candidates } }),
   startSystemData: (deep = true, path?: string) =>
     invoke<TaskId>("start_system_data", { request: { deep, path } }),
   cleanupSystemData: (path: string, expectedSize: number) =>

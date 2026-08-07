@@ -18,12 +18,12 @@ jobs:
     permissions:
       contents: read
     env:
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      FILEPILOT_APPLE_ID: ${{ secrets.APPLE_ID }}
+      FILEPILOT_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      FILEPILOT_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      FILEPILOT_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      FILEPILOT_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      FILEPILOT_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,24 +66,32 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Import optional Apple signing certificate
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        if: runner.os == 'macOS' && env.FILEPILOT_APPLE_CERTIFICATE != ''
         shell: bash
         run: |
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "$FILEPILOT_APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$FILEPILOT_KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security unlock-keychain -p "$FILEPILOT_KEYCHAIN_PASSWORD" build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$FILEPILOT_APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$FILEPILOT_KEYCHAIN_PASSWORD" build.keychain
 
       - name: Select optional Apple signing identity
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        if: runner.os == 'macOS' && env.FILEPILOT_APPLE_CERTIFICATE != ''
         shell: bash
         run: |
           identity=$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(.*\)".*/\1/p' | head -1)
           test -n "$identity"
           echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Set optional Apple notarization credentials
+        if: runner.os == 'macOS' && env.FILEPILOT_APPLE_CERTIFICATE != '' && env.FILEPILOT_APPLE_ID != '' && env.FILEPILOT_APPLE_PASSWORD != '' && env.FILEPILOT_APPLE_TEAM_ID != ''
+        shell: bash
+        run: |
+          echo "APPLE_ID=$FILEPILOT_APPLE_ID" >> "$GITHUB_ENV"
+          echo "APPLE_PASSWORD=$FILEPILOT_APPLE_PASSWORD" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$FILEPILOT_APPLE_TEAM_ID" >> "$GITHUB_ENV"
 
       - name: Install Linux bundling dependencies
         if: runner.os == 'Linux'

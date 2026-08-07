@@ -89,6 +89,60 @@ fn duplicate_report_groups_equal_contents_without_mutating_files() {
 }
 
 #[test]
+fn duplicate_report_handles_empty_files_and_groups_more_than_two_matches() {
+    let directory = tempdir().unwrap();
+    write_file(&directory.path().join("empty-a.bin"), b"");
+    write_file(&directory.path().join("empty-b.bin"), b"");
+    write_file(&directory.path().join("same-a.bin"), b"same");
+    write_file(&directory.path().join("same-b.bin"), b"same");
+    write_file(&directory.path().join("same-c.bin"), b"same");
+    write_file(&directory.path().join("different.bin"), b"diff");
+
+    let result = scan(directory.path(), &ScanOptions::default()).unwrap();
+    let groups = duplicate_files(&result).unwrap();
+
+    assert!(groups
+        .iter()
+        .any(|group| { group.paths.len() == 2 && group.size_bytes == 0 }));
+    assert!(groups.iter().any(|group| {
+        group.paths.len() == 3
+            && group.size_bytes == 4
+            && !group
+                .paths
+                .contains(&directory.path().join("different.bin"))
+    }));
+    assert!(!groups.iter().any(|group| {
+        group
+            .paths
+            .contains(&directory.path().join("different.bin"))
+    }));
+}
+
+#[test]
+fn duplicate_report_full_hash_rejects_partial_hash_matches() {
+    let directory = tempdir().unwrap();
+    let identical = vec![b'a'; 3 * 1024 * 1024];
+    let mut different_middle = identical.clone();
+    different_middle[1024 * 1024] = b'b';
+    write_file(&directory.path().join("large-a.bin"), &identical);
+    write_file(&directory.path().join("large-b.bin"), &identical);
+    write_file(
+        &directory.path().join("large-different.bin"),
+        &different_middle,
+    );
+
+    let result = scan(directory.path(), &ScanOptions::default()).unwrap();
+    let groups = duplicate_files(&result).unwrap();
+
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].paths.len(), 2);
+    assert!(!groups[0]
+        .paths
+        .iter()
+        .any(|path| path.ends_with("large-different.bin")));
+}
+
+#[test]
 fn rename_plan_supports_templates_and_zero_padding() {
     let directory = tempdir().unwrap();
     write_file(&directory.path().join("b.txt"), b"b");

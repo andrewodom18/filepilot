@@ -48,6 +48,31 @@ export interface DuplicateGroup {
   reclaimable_bytes: number;
 }
 
+export interface DuplicateCleanupCandidate {
+  path: string;
+  expectedSizeBytes: number;
+  expectedHash: string;
+  groupPaths: string[];
+  recommendedPrimary: string;
+}
+
+export interface DuplicateCleanupItem {
+  path: string;
+  sizeBytes: number;
+  destination: string;
+}
+
+export interface DuplicateCleanupFailure {
+  path: string;
+  message: string;
+}
+
+export interface DuplicateCleanupResult {
+  moved: DuplicateCleanupItem[];
+  failed: DuplicateCleanupFailure[];
+  reclaimedBytes: number;
+}
+
 export interface OperationAction {
   source: string;
   destination: string;
@@ -149,6 +174,7 @@ export type TaskKind =
   | "scan"
   | "large-files"
   | "duplicates"
+  | "cleanup-duplicates"
   | "system-data"
   | "cleanup-system-data"
   | "rename-preview"
@@ -164,6 +190,7 @@ export type TaskOutput =
   | { type: "scan"; data: ScanResult }
   | { type: "largeFiles"; data: { entries: LargeFileEntry[]; warnings: ScanWarning[] } }
   | { type: "duplicates"; data: { groups: DuplicateGroup[]; warnings: ScanWarning[] } }
+  | { type: "duplicateCleanup"; data: DuplicateCleanupResult }
   | { type: "systemData"; data: StorageReport }
   | { type: "cleanup"; data: CleanupResult }
   | { type: "operationPlan"; data: OperationPlan }

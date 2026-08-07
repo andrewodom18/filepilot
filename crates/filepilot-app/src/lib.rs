@@ -13,7 +13,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+mod duplicates;
 mod system_data;
+
+pub use duplicates::{
+    cleanup_duplicate_files, DuplicateCleanupCandidate, DuplicateCleanupFailure,
+    DuplicateCleanupItem, DuplicateCleanupResult,
+};
 
 pub use system_data::{
     analyze_system_data, analyze_system_data_location, cleanup_system_data_path, CleanupResult,
@@ -101,6 +107,7 @@ pub enum TaskKind {
     Scan,
     LargeFiles,
     Duplicates,
+    CleanupDuplicates,
     SystemData,
     CleanupSystemData,
     RenamePreview,
@@ -142,6 +149,7 @@ pub enum TaskOutput {
         groups: Vec<DuplicateGroup>,
         warnings: Vec<ScanWarning>,
     },
+    DuplicateCleanup(DuplicateCleanupResult),
     SystemData(StorageReport),
     Cleanup(CleanupResult),
     OperationPlan(OperationPlan),

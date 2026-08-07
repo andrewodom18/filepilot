@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "filepilot-app"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "chrono",
  "directories",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "filepilot-cli"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "chrono",
  "clap",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "filepilot-core"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "blake3",
  "chrono",
@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "filepilot-desktop"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "csv",
  "filepilot-app",

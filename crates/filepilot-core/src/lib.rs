@@ -16,8 +16,8 @@ pub use operations::{
 };
 pub use progress::{CancellationToken, OperationContext, ProgressEvent, ProgressReporter};
 pub use reports::{
-    duplicate_files, duplicate_files_with_context, large_files, large_files_with_context,
-    DuplicateGroup, LargeFileEntry,
+    duplicate_files, duplicate_files_with_context, file_hash, file_hash_with_context, large_files,
+    large_files_with_context, DuplicateGroup, LargeFileEntry,
 };
 pub use scan::{scan, scan_with_context, FileRecord, ScanOptions, ScanResult, ScanWarning};
 

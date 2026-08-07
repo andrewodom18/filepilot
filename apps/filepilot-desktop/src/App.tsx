@@ -4,9 +4,11 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { StatusPill } from "./StatusPill";
+import { readSystemTheme, resolveTheme } from "./theme";
 import type {
   AppSettings,
   CleanMetadataResult,
+  DuplicateCleanupCandidate,
   DuplicateGroup,
   ModuleId,
   OperationPlan,
@@ -25,7 +27,6 @@ import "./styles.css";
 const modules: { id: ModuleId; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "⌂" },
   { id: "scan", label: "Scan files", icon: "⌕" },
-  { id: "large-files", label: "Large files", icon: "▤" },
   { id: "duplicates", label: "Duplicates", icon: "◈" },
   { id: "system-data", label: "System Data", icon: "◒" },
   { id: "rename", label: "Rename", icon: "✎" },
@@ -50,6 +51,7 @@ function moduleForTask(kind: TaskKind): ModuleId {
   if (kind === "scan") return "scan";
   if (kind === "large-files") return "large-files";
   if (kind === "duplicates") return "duplicates";
+  if (kind === "cleanup-duplicates") return "activity";
   if (kind === "system-data") return "system-data";
   if (kind === "cleanup-system-data") return "activity";
   if (kind === "rename-preview" || kind === "apply-operation") return "rename";
@@ -63,6 +65,7 @@ export default function App() {
   const [selectedPath, setSelectedPath] = useState("");
   const [scanOptions, setScanOptions] = useState<ScanOptions>(defaultScanOptions);
   const [settings, setSettings] = useState<AppSettings>({ theme: "system", recentPaths: [] });
+  const [systemPrefersDark, setSystemPrefersDark] = useState(readSystemTheme);
   const [tasks, setTasks] = useState<Record<string, TaskSnapshot>>({});
   const [outputs, setOutputs] = useState<Outputs>({});
   const [renamePlan, setRenamePlan] = useState<OperationPlan | undefined>();
@@ -88,8 +91,28 @@ export default function App() {
           if (payload.output.data.kind === "Rename") setRenamePlan(payload.output.data);
           if (payload.output.data.kind === "Organize") setOrganizePlan(payload.output.data);
         }
-        if (payload.output.type === "metadata" && payload.kind === "metadata-preview") {
+      if (payload.output.type === "metadata" && payload.kind === "metadata-preview") {
           setMetadataPreview(payload.output.data);
+        }
+        if (payload.output.type === "duplicateCleanup") {
+          const movedPaths = new Set(payload.output.data.moved.map((item) => item.path));
+          setOutputs((previous) => {
+            const duplicateOutput = previous.duplicates;
+            if (duplicateOutput?.type !== "duplicates" || movedPaths.size === 0) return previous;
+            const groups = duplicateOutput.data.groups
+              .map((group) => ({
+                ...group,
+                paths: group.paths.filter((path) => !movedPaths.has(path)),
+              }))
+              .filter((group) => group.paths.length > 1);
+            return {
+              ...previous,
+              duplicates: {
+                ...duplicateOutput,
+                data: { ...duplicateOutput.data, groups },
+              },
+            };
+          });
         }
       }
       if (payload.taskId === activeTaskRef.current && payload.status !== "running") {
@@ -100,14 +123,45 @@ export default function App() {
       if (payload.status === "completed" && payload.output?.type === "cleanup") {
         setNotice(`Moved ${payload.output.data.path} to the system Trash`);
       }
+      if (payload.status === "completed" && payload.output?.type === "duplicateCleanup") {
+        const moved = payload.output.data.moved.length;
+        const failed = payload.output.data.failed.length;
+        setNotice(
+          failed > 0
+            ? `Moved ${moved} duplicate ${moved === 1 ? "copy" : "copies"} to the system Trash; ${failed} could not be moved.`
+            : `Moved ${moved} duplicate ${moved === 1 ? "copy" : "copies"} to the system Trash.`,
+        );
+      }
     }).then((cleanup) => { unlisten = cleanup; }).catch((reason) => setError(String(reason)));
 
     return () => unlisten?.();
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme;
-  }, [settings.theme]);
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    setSystemPrefersDark(media.matches);
+    if (typeof media.addEventListener === "function") media.addEventListener("change", handleChange);
+    else media.addListener?.(handleChange);
+    return () => {
+      if (typeof media.removeEventListener === "function") media.removeEventListener("change", handleChange);
+      else media.removeListener?.(handleChange);
+    };
+  }, []);
+
+  const resolvedTheme = resolveTheme(settings.theme, systemPrefersDark);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.themePreference = settings.theme;
+    root.dataset.theme = resolvedTheme;
+    root.style.colorScheme = resolvedTheme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      "content",
+      resolvedTheme === "dark" ? "#0d1117" : "#f5f7fb",
+    );
+  }, [settings.theme, resolvedTheme]);
 
   useEffect(() => {
     const window = getCurrentWebviewWindow();
@@ -125,8 +179,22 @@ export default function App() {
     () => Object.values(tasks).filter((task) => task.status === "running"),
     [tasks],
   );
+  const busy = runningTasks.length > 0;
 
   function selectPath(path: string) {
+    if (path !== selectedPath) {
+      setOutputs((previous) => {
+        const next = { ...previous };
+        delete next.scan;
+        delete next["large-files"];
+        delete next.duplicates;
+        return next;
+      });
+      setRenamePlan(undefined);
+      setOrganizePlan(undefined);
+      setMetadataPreview(undefined);
+      setNotice("");
+    }
     setSelectedPath(path);
     setError("");
     if (path) api.rememberPath(path).then(setSettings).catch(() => undefined);
@@ -144,6 +212,24 @@ export default function App() {
       const taskId = await start();
       activeTaskRef.current = taskId;
       setActiveTaskId(taskId);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
+  async function runAllScans() {
+    if (!selectedPath || busy) return;
+    setError("");
+    setNotice("");
+    try {
+      const taskIds = await Promise.all([
+        api.startScan(selectedPath, scanOptions),
+        api.startDuplicates(selectedPath, scanOptions),
+      ]);
+      const lastTaskId = taskIds[taskIds.length - 1];
+      activeTaskRef.current = lastTaskId;
+      setActiveTaskId(lastTaskId);
+      setNotice("File and duplicate scans started. Results will appear as they finish.");
     } catch (reason) {
       setError(String(reason));
     }
@@ -169,10 +255,9 @@ export default function App() {
   }
 
   function renderModule() {
-    const common = { selectedPath, pickFolder, selectPath, scanOptions, updateScanOptions, run, outputs, exportOutput };
+    const common = { selectedPath, pickFolder, selectPath, scanOptions, updateScanOptions, run, outputs, exportOutput, busy, runAllScans };
     switch (activeModule) {
       case "scan": return <ScanPage {...common} />;
-      case "large-files": return <LargeFilesPage {...common} />;
       case "duplicates": return <DuplicatesPage {...common} />;
       case "system-data": return <SystemDataPage {...common} />;
       case "rename": return <RenamePage {...common} plan={renamePlan} setPlan={setRenamePlan} />;
@@ -187,7 +272,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.0.0</small></div>
+        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.0.1</small></div>
         <nav aria-label="Main navigation">
           {modules.map((item) => (
             <button key={item.id} className={`nav-item ${activeModule === item.id ? "active" : ""}`} onClick={() => setActiveModule(item.id)}>
@@ -199,8 +284,8 @@ export default function App() {
       </aside>
       <main className="main-content">
         <header className="topbar">
-          <div><p className="eyebrow">FILE CONTROL CENTER</p><h1>{modules.find((item) => item.id === activeModule)?.label}</h1></div>
-          <div className="topbar-actions"><span className="folder-pill" title={selectedPath || "No folder selected"}>◉ {selectedPath || "Select a folder to begin"}</span><button className="button secondary" onClick={pickFolder}>Choose folder</button></div>
+          <div className="topbar-heading">{activeModule !== "overview" && <button className="back-button topbar-back" onClick={() => setActiveModule("overview")}>← Overview</button>}<p className="eyebrow">FILE CONTROL CENTER</p><h1>{modules.find((item) => item.id === activeModule)?.label}</h1></div>
+          <div className="topbar-actions"><span className="folder-pill" title={selectedPath || "No folder selected"}>◉ {selectedPath || "Select a folder to begin"}</span></div>
         </header>
         {error && <div className="alert error" role="alert"><strong>Something needs attention</strong><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {notice && <div className="alert success" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
@@ -220,6 +305,7 @@ interface CommonProps {
   run: (start: () => Promise<string>) => Promise<void>;
   outputs: Outputs;
   exportOutput: (output: TaskOutput, format: "json" | "csv") => Promise<void>;
+  busy: boolean;
 }
 
 function PageIntro({ title, description, children }: { title: string; description: string; children?: React.ReactNode }) {
@@ -241,10 +327,9 @@ function TaskBanner({ task, onCancel }: { task: TaskSnapshot; onCancel: () => Pr
   return <div className="task-banner"><div className="spinner" /><div className="task-copy"><strong>{progress?.phase || "Working…"}</strong><span>{progress?.currentPath || "FilePilot is working in the background"}</span></div>{percent !== undefined && <span className="progress-percent">{percent}%</span>}<button className="button ghost" onClick={() => void onCancel()}>Cancel</button></div>;
 }
 
-function OverviewPage({ selectedPath, pickFolder, selectPath, scanOptions, updateScanOptions, run, outputs, exportOutput, setActiveModule, lastScan }: CommonProps & { setActiveModule: (module: ModuleId) => void; lastScan?: ScanResult }) {
-  const scan = () => { if (selectedPath) void run(() => api.startScan(selectedPath, scanOptions)); };
+function OverviewPage({ selectedPath, pickFolder, selectPath, scanOptions, updateScanOptions, runAllScans, busy, outputs, exportOutput, setActiveModule, lastScan }: CommonProps & { setActiveModule: (module: ModuleId) => void; runAllScans: () => Promise<void>; lastScan?: ScanResult }) {
   return <><PageIntro title="A calmer way to control your files" description="Preview every change, keep your originals safe, and understand what is taking up space."><span className="privacy-badge">● Private by default</span></PageIntro><FolderBar selectedPath={selectedPath} pickFolder={pickFolder} selectPath={selectPath} /><ScanControls options={scanOptions} update={updateScanOptions} />
-    <section className="hero-card"><div><span className="card-kicker">READY WHEN YOU ARE</span><h3>{selectedPath ? "Start with a scan" : "Choose a folder to get started"}</h3><p>FilePilot reads locally, never uploads your files, and never changes anything during a scan.</p><button className="button primary" onClick={scan} disabled={!selectedPath}>Scan folder <span>→</span></button></div><div className="hero-orbit"><span>SCAN</span><span>PREVIEW</span><span>UNDO</span></div></section>
+    <section className="hero-card"><div><span className="card-kicker">READY WHEN YOU ARE</span><h3>{selectedPath ? "Run a complete folder check" : "Choose a folder to get started"}</h3><p>{selectedPath ? "Run the file inventory and duplicate check together. Use the Scan table to sort by size and filter smaller files out." : "Choose a folder above to run the file inventory and duplicate check."}</p><button className="button primary" onClick={() => void runAllScans()} disabled={!selectedPath || busy}>{busy ? "Scans running…" : "Run all scans"} <span>→</span></button></div><div className="hero-orbit"><span>SCAN</span><span>PREVIEW</span><span>UNDO</span></div></section>
     {lastScan && <section className="stats-grid"><Stat label="Files found" value={lastScan.files.length.toLocaleString()} detail="in the last scan" /><Stat label="Total size" value={formatBytes(lastScan.files.reduce((sum, file) => sum + file.size_bytes, 0))} detail="across scanned files" /><Stat label="Warnings" value={lastScan.warnings.length.toString()} detail="review in scan report" /></section>}
     <section className="module-grid">{modules.filter((item) => !["overview", "settings", "activity"].includes(item.id)).map((item) => <button key={item.id} className="module-card" onClick={() => setActiveModule(item.id)}><span className="module-card-icon">{item.icon}</span><strong>{item.label}</strong><span>Open workflow <b>→</b></span></button>)}</section>
     {outputs.scan && <ExportActions output={outputs.scan} exportOutput={exportOutput} />}
@@ -253,22 +338,96 @@ function OverviewPage({ selectedPath, pickFolder, selectPath, scanOptions, updat
 
 function Stat({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="stat-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>; }
 
-function ScanPage(props: CommonProps) {
-  const output = props.outputs.scan?.type === "scan" ? props.outputs.scan.data : undefined;
-  return <><PageIntro title="Scan files" description="Build a deterministic, read-only inventory of a folder and its contents."><button className="button primary" onClick={() => props.selectedPath && void props.run(() => api.startScan(props.selectedPath, props.scanOptions))} disabled={!props.selectedPath}>Run scan</button></PageIntro><FolderBar selectedPath={props.selectedPath} pickFolder={props.pickFolder} selectPath={props.selectPath} /><ScanControls options={props.scanOptions} update={props.updateScanOptions} />{output ? <><ReportHeader count={`${output.files.length} files · ${output.warnings.length} warnings`} output={props.outputs.scan} exportOutput={props.exportOutput} /><div className="table-card"><table><thead><tr><th>Relative path</th><th>Size</th><th>Modified</th><th>Flags</th></tr></thead><tbody>{output.files.map((file) => <tr key={file.path}><td className="path-cell">{file.relative_path}</td><td>{formatBytes(file.size_bytes)}</td><td>{file.modified_at ? new Date(file.modified_at).toLocaleString() : "—"}</td><td>{file.is_symlink ? "Symlink" : file.is_hidden ? "Hidden" : "—"}</td></tr>)}</tbody></table>{output.warnings.length > 0 && <WarningList warnings={output.warnings.map((warning) => warning.message)} />}</div></> : <EmptyState title="No scan yet" description="Choose a folder and run a scan to see every file and any access warnings." />}</>;
+type ScanSortKey = "path" | "size" | "modified" | "flags";
+type ScanSortDirection = "ascending" | "descending";
+type ScanSort = { key: ScanSortKey; direction: ScanSortDirection };
+
+function scanFlags(file: ScanResult["files"][number]) {
+  const flags = [
+    file.is_symlink ? "Symlink" : "",
+    file.is_hidden ? "Hidden" : "",
+  ].filter(Boolean);
+  return flags.join(", ") || "—";
 }
 
-function LargeFilesPage(props: CommonProps) {
-  const output = props.outputs["large-files"]?.type === "largeFiles" ? props.outputs["large-files"].data : undefined;
-  const [top, setTop] = useState(50);
+function SortableHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: ScanSortKey; sort: ScanSort; onSort: (key: ScanSortKey) => void }) {
+  const active = sort.key === sortKey;
+  return <th aria-sort={active ? sort.direction : "none"}><button className="table-sort" type="button" onClick={() => onSort(sortKey)} aria-label={`Sort by ${label}${active ? `, currently ${sort.direction}` : ""}`}><span>{label}</span><span className="sort-indicator" aria-hidden="true">{active ? (sort.direction === "ascending" ? "↑" : "↓") : "↕"}</span></button></th>;
+}
+
+function ScanPage(props: CommonProps) {
+  const output = props.outputs.scan?.type === "scan" ? props.outputs.scan.data : undefined;
+  const [sort, setSort] = useState<ScanSort>({ key: "path", direction: "ascending" });
   const [minSize, setMinSize] = useState(0);
-  const runReport = () => props.selectedPath && void props.run(() => api.startLargeFiles(props.selectedPath, props.scanOptions, top, minSize));
-  return <><PageIntro title="Large files" description="Find the files that are consuming the most storage, sorted with stable results."><button className="button primary" onClick={runReport} disabled={!props.selectedPath}>Find large files</button></PageIntro><FolderBar selectedPath={props.selectedPath} pickFolder={props.pickFolder} selectPath={props.selectPath} /><ScanControls options={props.scanOptions} update={props.updateScanOptions} /><div className="inline-form"><label>Show top<input type="number" min="1" value={top} onChange={(event) => setTop(Number(event.target.value))} /></label><label>Minimum size<input type="number" min="0" value={minSize} onChange={(event) => setMinSize(Number(event.target.value))} /></label><span className="field-hint">bytes</span></div>{output ? <><ReportHeader count={`${output.entries.length} files`} output={props.outputs["large-files"]} exportOutput={props.exportOutput} /><div className="table-card"><table><thead><tr><th>#</th><th>Path</th><th>Size</th></tr></thead><tbody>{output.entries.map((entry, index) => <tr key={entry.path}><td>{index + 1}</td><td className="path-cell">{entry.path}</td><td className="size-cell">{formatBytes(entry.size_bytes)}</td></tr>)}</tbody></table>{output.warnings.length > 0 && <WarningList warnings={output.warnings.map((warning) => warning.message)} />}</div></> : <EmptyState title="No report yet" description="Run a large-file report to surface the biggest storage wins." />}</>;
+  const visibleFiles = useMemo(() => {
+    if (!output) return [];
+    const files = output.files.filter((file) => file.size_bytes >= minSize);
+    files.sort((left, right) => {
+      let comparison = 0;
+      if (sort.key === "path") comparison = left.relative_path.localeCompare(right.relative_path);
+      if (sort.key === "size") comparison = left.size_bytes === right.size_bytes ? 0 : left.size_bytes < right.size_bytes ? -1 : 1;
+      if (sort.key === "modified") {
+        const leftTime = left.modified_at ? Date.parse(left.modified_at) || 0 : 0;
+        const rightTime = right.modified_at ? Date.parse(right.modified_at) || 0 : 0;
+        comparison = leftTime === rightTime ? 0 : leftTime < rightTime ? -1 : 1;
+      }
+      if (sort.key === "flags") comparison = scanFlags(left).localeCompare(scanFlags(right));
+      if (comparison === 0) comparison = left.relative_path.localeCompare(right.relative_path);
+      return sort.direction === "ascending" ? comparison : -comparison;
+    });
+    return files;
+  }, [minSize, output, sort]);
+
+  function toggleSort(key: ScanSortKey) {
+    setSort((previous) => previous.key === key
+      ? { ...previous, direction: previous.direction === "ascending" ? "descending" : "ascending" }
+      : { key, direction: key === "size" || key === "modified" ? "descending" : "ascending" });
+  }
+
+  return <><PageIntro title="Scan files" description="Build a deterministic, read-only inventory of a folder and its contents."><button className="button primary" onClick={() => props.selectedPath && void props.run(() => api.startScan(props.selectedPath, props.scanOptions))} disabled={!props.selectedPath}>Run scan</button></PageIntro><FolderBar selectedPath={props.selectedPath} pickFolder={props.pickFolder} selectPath={props.selectPath} /><ScanControls options={props.scanOptions} update={props.updateScanOptions} />{output ? <><div className="scan-table-tools"><label className="scan-size-filter">Show files at least<input type="number" min="0" step="1" value={minSize} onChange={(event) => { const value = Number(event.target.value); setMinSize(Number.isFinite(value) ? Math.max(0, value) : 0); }} /></label><span className="field-hint">bytes · display filter only</span></div><ReportHeader count={`${visibleFiles.length} of ${output.files.length} files · ${output.warnings.length} warnings`} output={props.outputs.scan} exportOutput={props.exportOutput} /><div className="table-card"><table><thead><tr><SortableHeader label="Relative path" sortKey="path" sort={sort} onSort={toggleSort} /><SortableHeader label="Size" sortKey="size" sort={sort} onSort={toggleSort} /><SortableHeader label="Modified" sortKey="modified" sort={sort} onSort={toggleSort} /><SortableHeader label="Flags" sortKey="flags" sort={sort} onSort={toggleSort} /></tr></thead><tbody>{visibleFiles.map((file) => <tr key={file.path}><td className="path-cell">{file.relative_path}</td><td>{formatBytes(file.size_bytes)}</td><td>{file.modified_at ? new Date(file.modified_at).toLocaleString() : "—"}</td><td>{scanFlags(file)}</td></tr>)}</tbody></table>{visibleFiles.length === 0 && <p className="table-footnote">No files meet the minimum size filter.</p>}{output.warnings.length > 0 && <WarningList warnings={output.warnings.map((warning) => warning.message)} />}</div></> : <EmptyState title="No scan yet" description="Choose a folder and run a scan to see every file and any access warnings." />}</>;
 }
 
 function DuplicatesPage(props: CommonProps) {
   const output = props.outputs.duplicates?.type === "duplicates" ? props.outputs.duplicates.data : undefined;
-  return <><PageIntro title="Duplicate finder" description="Compare file sizes, partial hashes, and full hashes to identify identical files without deleting anything."><button className="button primary" onClick={() => props.selectedPath && void props.run(() => api.startDuplicates(props.selectedPath, props.scanOptions))} disabled={!props.selectedPath}>Find duplicates</button></PageIntro><FolderBar selectedPath={props.selectedPath} pickFolder={props.pickFolder} selectPath={props.selectPath} /><ScanControls options={props.scanOptions} update={props.updateScanOptions} />{output ? <><ReportHeader count={`${output.groups.length} duplicate groups`} output={props.outputs.duplicates} exportOutput={props.exportOutput} />{output.groups.length ? <div className="duplicate-list">{output.groups.map((group) => <DuplicateCard key={group.hash} group={group} />)}</div> : <EmptyState title="No duplicates found" description="These files appear unique within the selected folder." />}</> : <EmptyState title="No report yet" description="Run the duplicate finder to compare matching file candidates." />}</>;
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const groups = output?.groups ?? [];
+  const selectedCandidates: DuplicateCleanupCandidate[] = groups.flatMap((group) =>
+    group.paths
+      .filter((path) => selectedPaths.has(path))
+      .map((path) => ({
+        path,
+        expectedSizeBytes: group.size_bytes,
+        expectedHash: group.hash,
+        groupPaths: group.paths,
+        recommendedPrimary: group.recommended_primary,
+      })),
+  );
+  const selectedBytes = selectedCandidates.reduce((total, candidate) => total + candidate.expectedSizeBytes, 0);
+
+  function togglePath(path: string) {
+    setSelectedPaths((previous) => {
+      const next = new Set(previous);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function selectAllCopies() {
+    setSelectedPaths(new Set(groups.flatMap((group) => group.paths.filter((path) => path !== group.recommended_primary))));
+  }
+
+  async function moveSelectedToTrash() {
+    if (selectedCandidates.length === 0) return;
+    const accepted = await confirm(
+      `Move ${selectedCandidates.length} selected duplicate ${selectedCandidates.length === 1 ? "copy" : "copies"} (${formatBytes(selectedBytes)}) to the system Trash? Recommended primary files will be kept.`,
+    ).catch(() => false);
+    if (!accepted) return;
+    await props.run(() => api.cleanupDuplicates(selectedCandidates));
+    setSelectedPaths(new Set());
+  }
+
+  return <><PageIntro title="Duplicate finder" description="Compare file sizes, review each group, and choose which extra copies should move to the recoverable system Trash."><div className="page-actions"><button className="button primary" onClick={() => props.selectedPath && void props.run(() => api.startDuplicates(props.selectedPath, props.scanOptions))} disabled={!props.selectedPath}>Find duplicates</button><button className="button secondary" onClick={selectAllCopies} disabled={!groups.length}>Select all copies</button><button className="button primary" onClick={() => void moveSelectedToTrash()} disabled={!selectedCandidates.length}>Move {selectedCandidates.length || "selected"} to Trash</button></div></PageIntro><FolderBar selectedPath={props.selectedPath} pickFolder={props.pickFolder} selectPath={props.selectPath} /><ScanControls options={props.scanOptions} update={props.updateScanOptions} />{output ? <><ReportHeader count={`${output.groups.length} duplicate groups · ${selectedCandidates.length} selected`} output={props.outputs.duplicates} exportOutput={props.exportOutput} />{output.groups.length ? <><div className="duplicate-actionbar"><span>The suggested primary is only a recommendation. Select the files you no longer need, but keep at least one file in each group.</span>{selectedPaths.size > 0 && <button className="button ghost" onClick={() => setSelectedPaths(new Set())}>Clear selection</button>}</div><div className="duplicate-list">{output.groups.map((group) => <DuplicateCard key={group.hash} group={group} selectedPaths={selectedPaths} onToggle={togglePath} />)}</div></> : <EmptyState title="No duplicates found" description="These files appear unique within the selected folder." />}</> : <EmptyState title="No report yet" description="Run the duplicate finder to compare matching file candidates." />}</>;
 }
 
 function SystemDataPage(props: CommonProps) {
@@ -292,7 +451,7 @@ export function StorageItemCard({ item, nested = false, onAnalyze, onCleanup }: 
   return <article className={`storage-item ${nested ? "nested" : ""}`}><div className="storage-item-heading"><div><strong>{item.label}</strong><span className="storage-path">{item.path}</span></div><div className="storage-actions">{item.isDirectory && <button className="button ghost" onClick={() => onAnalyze(item.path)}>Inspect</button>}{item.cleanupAllowed && <button className="button ghost danger" onClick={() => void onCleanup(item)}>Move to Trash</button>}<div className="storage-size">{item.sizeKnown ? formatBytes(item.sizeBytes) : "Size not reported"}</div></div></div><div className="storage-meta"><span className={`assessment-pill ${item.assessment}`}>{assessmentLabel(item.assessment)}</span><span>{item.reason}</span></div><p className="storage-recommendation"><strong>Next step:</strong> {item.recommendation}</p>{item.children.length > 0 && <details className="storage-children"><summary>Show largest child locations</summary>{item.children.map((child) => <StorageItemCard key={child.path} item={child} nested onAnalyze={onAnalyze} onCleanup={onCleanup} />)}</details>}</article>;
 }
 
-function DuplicateCard({ group }: { group: DuplicateGroup }) { return <article className="duplicate-card"><div className="duplicate-heading"><div><span className="hash-label">BLAKE3</span><code>{group.hash.slice(0, 18)}…</code></div><strong>{formatBytes(group.reclaimable_bytes)} reclaimable</strong></div><p>{group.paths.length} identical files · {formatBytes(group.size_bytes)} each · keep <span className="primary-path">{group.recommended_primary}</span></p><ul>{group.paths.map((path) => <li key={path}>{path}</li>)}</ul></article>; }
+function DuplicateCard({ group, selectedPaths, onToggle }: { group: DuplicateGroup; selectedPaths: Set<string>; onToggle: (path: string) => void }) { return <article className="duplicate-card"><div className="duplicate-heading"><div><span className="hash-label">BLAKE3</span><code>{group.hash.slice(0, 18)}…</code></div><strong>{formatBytes(group.reclaimable_bytes)} reclaimable</strong></div><p>{group.paths.length} identical files · {formatBytes(group.size_bytes)} each · <span className="primary-path">Suggested keep:</span> {group.recommended_primary}</p><ul>{group.paths.map((path) => <li key={path} className={path === group.recommended_primary ? "duplicate-primary" : undefined}><label className="duplicate-choice"><input type="checkbox" checked={selectedPaths.has(path)} onChange={() => onToggle(path)} /><span><strong>{path === group.recommended_primary ? "Suggested keep" : "Move copy to Trash"}</strong><span>{path}</span></span></label></li>)}</ul></article>; }
 
 function RenamePage(props: CommonProps & { plan?: OperationPlan; setPlan: (plan: OperationPlan | undefined) => void }) {
   const [mode, setMode] = useState<"pattern" | "regex">("pattern");
@@ -363,6 +522,6 @@ function ReportHeader({ count, output, exportOutput }: { count: string; output?:
 function ExportActions({ output, exportOutput }: { output: TaskOutput; exportOutput: (output: TaskOutput, format: "json" | "csv") => Promise<void> }) { const csvSupported = ["scan", "largeFiles", "duplicates", "systemData"].includes(output.type); return <div className="export-actions"><button className="button ghost" onClick={() => void exportOutput(output, "json")}>Export JSON</button>{csvSupported && <button className="button ghost" onClick={() => void exportOutput(output, "csv")}>Export CSV</button>}</div>; }
 function WarningList({ warnings }: { warnings: string[] }) { return <div className="warning-list"><strong>Warnings</strong>{warnings.slice(0, 12).map((warning, index) => <span key={`${warning}-${index}`}>! {warning}</span>)}{warnings.length > 12 && <span>…and {warnings.length - 12} more</span>}</div>; }
 function EmptyState({ title, description }: { title: string; description: string }) { return <section className="empty-state"><span className="empty-icon">◇</span><h3>{title}</h3><p>{description}</p></section>; }
-function labelForTask(kind: TaskKind) { return ({ scan: "File scan", "large-files": "Large-file report", duplicates: "Duplicate scan", "system-data": "System Data analysis", "cleanup-system-data": "System Data cleanup", "rename-preview": "Rename preview", "organize-preview": "Organization preview", "metadata-preview": "Metadata preview", "apply-operation": "File operation", "apply-metadata": "Metadata cleaning", undo: "Undo operation" } as Record<TaskKind, string>)[kind]; }
+function labelForTask(kind: TaskKind) { return ({ scan: "File scan", "large-files": "Large-file report", duplicates: "Duplicate scan", "cleanup-duplicates": "Duplicate cleanup", "system-data": "System Data analysis", "cleanup-system-data": "System Data cleanup", "rename-preview": "Rename preview", "organize-preview": "Organization preview", "metadata-preview": "Metadata preview", "apply-operation": "File operation", "apply-metadata": "Metadata cleaning", undo: "Undo operation" } as Record<TaskKind, string>)[kind]; }
 function assessmentLabel(assessment: StorageItem["assessment"]) { return ({ "likely-safe-to-review": "Likely safe to review", "review-before-removing": "Review before removing", "user-data": "Personal data", "system-managed": "System managed", unknown: "Unknown" })[assessment]; }
 function formatBytes(bytes: number) { if (bytes === 0) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`; }

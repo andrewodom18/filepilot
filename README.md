@@ -5,14 +5,14 @@
 
 FilePilot is a privacy-first desktop app and CLI for safe file control on macOS, Windows, and Linux. Scan storage, find duplicates, preview renames, organize folders, and clean image metadata without uploading files or requiring an account.
 
-## FilePilot 2.0.0
+## FilePilot 2.0.1
 
 The v2 desktop app is a local-only Tauri application with a React interface. It shares the same Rust core as the CLI and includes:
 
-- Read-only recursive scans with warnings and filtering.
-- Large-file reports with JSON and CSV export.
+- Read-only recursive scans with warnings, sortable table columns, and a display-only minimum-size filter.
+- The CLI large-files report remains available for scripting and JSON/CSV export.
 - macOS System Data analysis that identifies large user-library, shared-library, and system-working-data contributors, with constrained Trash cleanup for selected user cache and log entries.
-- Duplicate detection using size grouping, partial hashes, and full hashes.
+- Duplicate detection using size grouping, partial hashes, and full hashes, with explicit desktop selection to move unwanted copies to the recoverable system Trash.
 - Template and regex batch renaming.
 - Organization by extension, modified date, or filename.
 - JPEG, PNG, and WebP metadata cleaning to new copies.
@@ -90,7 +90,7 @@ Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is unde
 - Do not follow symlinks by default.
 - Keep originals intact during metadata cleaning.
 - Report permission failures as warnings where possible.
-- Duplicate detection never deletes or moves files.
+- Duplicate cleanup is never automatic: the desktop app requires explicit file selection and confirmation, revalidates size and full hash, keeps at least one file in every group, and moves selected files only to the recoverable system Trash. The CLI duplicate command remains report-only.
 - Disable cancellation once a mutation batch begins.
 - Keep an operation log and refuse unsafe undo when a destination changed.
 - Keep System Data analysis read-only by default; optional cleanup only moves explicitly selected direct children of the current user's cache or log folders to the system Trash and never touches backups, system files, snapshots, or personal data.
@@ -128,6 +128,5 @@ filepilot/
 - Watch folders and scheduled workflows.
 - Safe, user-confirmed cleanup actions for clearly understood cache and temporary-data categories.
 - Saved cleanup profiles.
-- Optional duplicate actions to the system trash.
 - File tagging and file-manager integrations.
 - Signed release artifacts and an opt-in updater after the desktop release is stable.

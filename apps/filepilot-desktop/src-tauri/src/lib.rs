@@ -16,6 +16,7 @@ pub fn run() {
             commands::start_scan,
             commands::start_large_files,
             commands::start_duplicates,
+            commands::cleanup_duplicates,
             commands::start_system_data,
             commands::cleanup_system_data,
             commands::preview_rename,
