@@ -4,6 +4,7 @@ export type TaskId = string;
 export interface AppSettings {
   theme: Theme;
   recentPaths: string[];
+  fullDiskAccessSetupComplete: boolean;
 }
 
 export interface ScanOptions {
@@ -115,6 +116,25 @@ export type StorageAssessment =
   | "system-managed"
   | "unknown";
 
+export type StorageCategory =
+  | "app-caches"
+  | "app-logs"
+  | "temporary-files"
+  | "developer-artifacts"
+  | "device-backups"
+  | "app-support-data"
+  | "sandboxed-app-data"
+  | "app-settings"
+  | "mail-data"
+  | "messages-data"
+  | "cloud-files"
+  | "personal-media"
+  | "virtual-memory"
+  | "system-databases"
+  | "system-managed"
+  | "other-system-working-data"
+  | "other-data";
+
 export interface StorageItem {
   label: string;
   path: string;
@@ -122,6 +142,7 @@ export interface StorageItem {
   sizeKnown: boolean;
   isDirectory: boolean;
   cleanupAllowed: boolean;
+  category: StorageCategory;
   assessment: StorageAssessment;
   reason: string;
   recommendation: string;

@@ -10,6 +10,7 @@ const item: StorageItem = {
   sizeKnown: true,
   isDirectory: true,
   cleanupAllowed: true,
+  category: "app-caches",
   assessment: "likely-safe-to-review",
   reason: "Cache data that may be recreated.",
   recommendation: "Review the owning app first.",

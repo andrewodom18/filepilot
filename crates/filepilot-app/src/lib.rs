@@ -23,7 +23,7 @@ pub use duplicates::{
 
 pub use system_data::{
     analyze_system_data, analyze_system_data_location, cleanup_system_data_path, CleanupResult,
-    StorageAssessment, StorageItem, StorageReport, VolumeInfo,
+    StorageAssessment, StorageCategory, StorageItem, StorageReport, VolumeInfo,
 };
 
 pub type TaskId = String;
@@ -56,6 +56,8 @@ pub struct AppSettings {
     pub theme: Theme,
     #[serde(default)]
     pub recent_paths: Vec<PathBuf>,
+    #[serde(default)]
+    pub full_disk_access_setup_complete: bool,
 }
 
 pub struct SettingsStore {

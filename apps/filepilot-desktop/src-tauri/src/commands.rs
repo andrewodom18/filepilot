@@ -5,6 +5,9 @@ use std::{
     thread,
 };
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
+
 use filepilot_app::{
     analyze_system_data, analyze_system_data_location, cleanup_duplicate_files,
     cleanup_system_data_path, AppError, AppSettings, DuplicateCleanupCandidate, SettingsStore,
@@ -215,6 +218,28 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
         .map_err(|_| "settings lock is unavailable".to_string())?
         .load()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_platform() -> &'static str {
+    std::env::consts::OS
+}
+
+#[tauri::command]
+pub fn open_full_disk_access_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("/usr/bin/open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+            .spawn()
+            .map_err(|error| format!("could not open macOS Full Disk Access settings: {error}"))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Full Disk Access setup is available on macOS only".to_string())
+    }
 }
 
 #[tauri::command]

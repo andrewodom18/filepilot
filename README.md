@@ -11,7 +11,8 @@ The v2 desktop app is a local-only Tauri application with a React interface. It 
 
 - Read-only recursive scans with warnings, sortable table columns, and a display-only minimum-size filter.
 - The CLI large-files report remains available for scripting and JSON/CSV export.
-- macOS System Data analysis that identifies large user-library, shared-library, and system-working-data contributors, with constrained Trash cleanup for selected user cache and log entries.
+- macOS System Data analysis that reports non-overlapping named sources—caches, app support data, containers, device backups, developer artifacts, temporary files, swap, system databases, and more—with category-specific guidance and constrained Trash cleanup for selected user cache and log entries.
+- Optional one-time macOS Full Disk Access setup that opens the native privacy pane to improve visibility into protected local folders.
 - Duplicate detection using size grouping, partial hashes, and full hashes, with explicit desktop selection to move unwanted copies to the recoverable system Trash.
 - Template and regex batch renaming.
 - Organization by extension, modified date, or filename.
@@ -94,6 +95,7 @@ Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is unde
 - Disable cancellation once a mutation batch begins.
 - Keep an operation log and refuse unsafe undo when a destination changed.
 - Keep System Data analysis read-only by default; optional cleanup only moves explicitly selected direct children of the current user's cache or log folders to the system Trash and never touches backups, system files, snapshots, or personal data.
+- Full Disk Access is optional. It can improve visibility into protected local storage, but it does not grant administrator or network access, and macOS does not let FilePilot verify that the setting is enabled.
 
 ## Privacy and security
 

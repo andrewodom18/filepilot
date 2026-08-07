@@ -10,6 +10,8 @@ import type {
 
 export const api = {
   getSettings: () => invoke<AppSettings>("get_settings"),
+  getPlatform: () => invoke<string>("get_platform"),
+  openFullDiskAccessSettings: () => invoke<void>("open_full_disk_access_settings"),
   saveSettings: (settings: AppSettings) =>
     invoke<AppSettings>("save_settings", { request: { settings } }),
   rememberPath: (path: string) =>

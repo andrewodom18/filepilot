@@ -11,6 +11,8 @@ pub fn run() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::get_platform,
+            commands::open_full_disk_access_settings,
             commands::save_settings,
             commands::remember_path,
             commands::start_scan,
