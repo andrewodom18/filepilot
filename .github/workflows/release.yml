@@ -127,9 +127,6 @@ jobs:
           if [ -d target/${{ matrix.target }}/release/bundle/appimage ]; then
             find target/${{ matrix.target }}/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -exec cp {} release-assets/ \;
           fi
-          if [ -d target/${{ matrix.target }}/release/bundle/macos ]; then
-            tar -czf release-assets/filepilot-desktop-${{ matrix.name }}.app.tar.gz -C target/${{ matrix.target }}/release/bundle/macos FilePilot.app
-          fi
 
       - name: Package Windows artifacts
         if: runner.os == 'Windows'

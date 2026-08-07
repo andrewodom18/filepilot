@@ -272,7 +272,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.0.1</small></div>
+        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.0.2</small></div>
         <nav aria-label="Main navigation">
           {modules.map((item) => (
             <button key={item.id} className={`nav-item ${activeModule === item.id ? "active" : ""}`} onClick={() => setActiveModule(item.id)}>
