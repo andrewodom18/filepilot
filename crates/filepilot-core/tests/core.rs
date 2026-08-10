@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use filepilot_core::{
     apply_operation, build_organize_plan, build_rename_plan, clean_images, duplicate_files,
@@ -30,10 +30,16 @@ fn scanner_is_recursive_deterministic_and_conservative() {
     let paths: Vec<_> = result
         .files
         .iter()
-        .map(|file| file.relative_path.to_string_lossy().to_string())
+        .map(|file| file.relative_path.clone())
         .collect();
 
-    assert_eq!(paths, vec!["a.txt", "nested/b.txt"]);
+    assert_eq!(
+        paths,
+        vec![
+            PathBuf::from("a.txt"),
+            PathBuf::from("nested").join("b.txt")
+        ]
+    );
     assert!(result.warnings.is_empty());
 }
 
