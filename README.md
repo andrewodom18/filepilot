@@ -1,8 +1,5 @@
 # FilePilot
 
-[![CI](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewodom18/filepilot/actions/workflows/ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/andrewodom18/filepilot?sort=semver)](https://github.com/andrewodom18/filepilot/releases)
-
 FilePilot is a privacy-first desktop app and CLI for safe file control on macOS, Windows, and Linux. Scan storage, find duplicates, preview renames, organize folders, and clean image metadata without uploading files or requiring an account.
 
 ## FilePilot 2.0.2
