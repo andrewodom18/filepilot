@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
+import { loadAppVersion } from "./appVersion";
 import { StatusPill } from "./StatusPill";
 import { readSystemTheme, resolveTheme } from "./theme";
 import type {
@@ -77,6 +78,15 @@ export default function App() {
   const activeTaskRef = useRef<string | undefined>(undefined);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [appVersion, setAppVersion] = useState("…");
+
+  useEffect(() => {
+    let mounted = true;
+    void loadAppVersion().then((version) => {
+      if (mounted) setAppVersion(version);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     api.getSettings().then((loaded) => {
@@ -294,7 +304,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>2.1.0</small></div>
+        <div className="brand"><FilePilotMark /><span>FilePilot</span><small>{appVersion}</small></div>
         <nav aria-label="Main navigation">
           {modules.map((item) => (
             <button key={item.id} className={`nav-item ${activeModule === item.id ? "active" : ""}`} onClick={() => setActiveModule(item.id)}>

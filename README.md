@@ -2,7 +2,7 @@
 
 FilePilot is a privacy-first desktop app and CLI for safe file control on macOS, Windows, and Linux. Scan storage, find duplicates, preview renames, organize folders, and clean image metadata without uploading files or requiring an account.
 
-## FilePilot 2.0.2
+## FilePilot 2.1.1
 
 The v2 desktop app is a local-only Tauri application with a React interface. It shares the same Rust core as the CLI and includes:
 
@@ -21,12 +21,16 @@ FilePilot does not include authentication, a server, a database, telemetry, clou
 
 ## Download
 
-Download the latest platform installer from [GitHub Releases](https://github.com/andrewodom18/filepilot/releases):
+Download the latest platform installer from [GitHub Releases](https://github.com/andrewodom18/filepilot/releases/latest). Choose the asset that matches your computer:
 
-- macOS arm64: `.dmg`
-- macOS x64: `.dmg`
-- Windows x64: NSIS installer `.exe`
-- Linux x64: `.AppImage`
+| Platform | Check | Installer |
+| --- | --- | --- |
+| macOS Apple Silicon | `uname -m` prints `arm64` | `FilePilot-macOS-Apple-Silicon.dmg` (`*_aarch64.dmg` on older releases) |
+| macOS Intel | `uname -m` prints `x86_64` | `FilePilot-macOS-Intel.dmg` (`*_x64.dmg` on older releases) |
+| Windows x64 | Settings → System → About → x64-based processor | `FilePilot-Windows-x86_64-Setup.exe` |
+| Linux x64 | `uname -m` prints `x86_64` | `FilePilot-Linux-x86_64.AppImage` |
+
+On macOS, open the DMG and drag FilePilot onto Applications. Starting with v2.1.1, release installers use stable, human-readable asset names so the correct download is clear even when multiple architectures are listed.
 
 Each release also includes CLI archives and `SHA256SUMS.txt`. macOS and Windows artifacts may show platform security warnings when signing credentials are not configured; verify the checksum and review the release notes before opening an unsigned artifact.
 
@@ -76,7 +80,7 @@ npm test
 npm run build
 ```
 
-Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is under `apps/filepilot-desktop/src-tauri`; reusable filesystem behavior remains in `crates/filepilot-core`, and desktop task/settings services live in `crates/filepilot-app`.
+Build a local desktop bundle with `npm run tauri:build`. Development runs use the separate `FilePilot Dev` application identity so they cannot be confused with or intercept launches of an installed release. The Tauri shell is under `apps/filepilot-desktop/src-tauri`; reusable filesystem behavior remains in `crates/filepilot-core`, and desktop task/settings services live in `crates/filepilot-app`.
 
 ## Safety contract
 
@@ -89,7 +93,7 @@ Build a local desktop bundle with `npm run tauri:build`. The Tauri shell is unde
 - Keep originals intact during metadata cleaning.
 - Report permission failures as warnings where possible.
 - Duplicate cleanup is never automatic: the desktop app requires explicit file selection and confirmation, revalidates size and full hash, keeps at least one file in every group, and moves selected files only to the recoverable system Trash. The CLI duplicate command remains report-only.
-- Disable cancellation once a mutation batch begins.
+- Check cancellation before each mutation. A single operating-system move completes atomically before cancellation is observed, and files already moved remain recoverable.
 - Keep an operation log and refuse unsafe undo when a destination changed.
 - Keep System Data analysis read-only by default; optional cleanup only moves explicitly selected direct children of the current user's cache or log folders to the system Trash and never touches backups, system files, snapshots, or personal data.
 - Full Disk Access is optional. It can improve visibility into protected local storage, but it does not grant administrator or network access, and macOS does not let FilePilot verify that the setting is enabled.

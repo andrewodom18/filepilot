@@ -27,6 +27,8 @@ npm install
 npm run tauri:dev
 ```
 
+The development command uses a separate `FilePilot Dev` product name and `com.filepilot.desktop.dev` bundle identifier. This prevents a local debug build from taking over launches intended for an installed release. Use `npm run tauri:build:debug` when a bundled debug application is needed.
+
 The frontend-only build is useful for checking TypeScript and CSS:
 
 ```bash
@@ -37,7 +39,7 @@ npm run tauri:build -- --no-bundle
 
 ## Release artifacts
 
-The release workflow builds the existing CLI and the Tauri app for macOS arm64/x64, Windows x64, and Linux x64. Desktop bundles are DMG, NSIS, and AppImage. The workflow also publishes portable CLI archives and SHA-256 checksums. CI runs Clippy and a host Tauri production compilation so command registration and native dependencies are checked before release work begins.
+The release workflow builds the existing CLI and the Tauri app for macOS arm64/x64, Windows x64, and Linux x64. Desktop bundles are DMG, NSIS, and AppImage with stable architecture-specific filenames. The macOS DMG includes explicit drag-to-Applications guidance. The workflow also publishes portable CLI archives and SHA-256 checksums. CI verifies that Cargo, npm, the npm lockfile, and Tauri bundle versions match, then runs Clippy and a host Tauri production compilation so command registration and native dependencies are checked before release work begins.
 
 Signing hooks are intentionally kept in the workflow boundary. No signing keys or credentials belong in this public repository. Until repository secrets are configured, release notes must disclose when an artifact is unsigned.
 

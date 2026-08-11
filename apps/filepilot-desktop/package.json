@@ -1,14 +1,16 @@
 {
   "name": "filepilot-desktop",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "verify:versions": "node ../../scripts/verify-versions.mjs",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "tauri:build:debug": "tauri build --debug --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build",
     "test": "vitest run"
   },

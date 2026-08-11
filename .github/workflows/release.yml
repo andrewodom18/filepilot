@@ -103,6 +103,10 @@ jobs:
         working-directory: apps/filepilot-desktop
         run: npm ci
 
+      - name: Verify version metadata
+        working-directory: apps/filepilot-desktop
+        run: npm run verify:versions
+
       - name: Build CLI
         run: cargo build --release --target ${{ matrix.target }} -p filepilot-cli
 
@@ -122,10 +126,17 @@ jobs:
           rm -rf release-assets/filepilot-${{ matrix.name }}
           mkdir -p release-assets
           if [ -d target/${{ matrix.target }}/release/bundle/dmg ]; then
-            find target/${{ matrix.target }}/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -not -name 'rw.*' -exec cp {} release-assets/ \;
+            installer=$(find target/${{ matrix.target }}/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -not -name 'rw.*' | head -1)
+            test -n "$installer"
+            case "${{ matrix.name }}" in
+              macos-arm64) cp "$installer" release-assets/FilePilot-macOS-Apple-Silicon.dmg ;;
+              macos-x64) cp "$installer" release-assets/FilePilot-macOS-Intel.dmg ;;
+            esac
           fi
           if [ -d target/${{ matrix.target }}/release/bundle/appimage ]; then
-            find target/${{ matrix.target }}/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -exec cp {} release-assets/ \;
+            installer=$(find target/${{ matrix.target }}/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' | head -1)
+            test -n "$installer"
+            cp "$installer" release-assets/FilePilot-Linux-x86_64.AppImage
           fi
 
       - name: Package Windows artifacts
@@ -137,7 +148,9 @@ jobs:
           Copy-Item README.md release-assets/filepilot-${{ matrix.name }}/
           Compress-Archive -Path release-assets/filepilot-${{ matrix.name }} -DestinationPath release-assets/filepilot-${{ matrix.name }}.zip
           Remove-Item -Recurse -Force release-assets/filepilot-${{ matrix.name }}
-          Get-ChildItem -Path target/${{ matrix.target }}/release/bundle -Recurse -Include *.exe,*.msi | Copy-Item -Destination release-assets
+          $installer = Get-ChildItem -Path target/${{ matrix.target }}/release/bundle -Recurse -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced" }
+          Copy-Item $installer.FullName release-assets/FilePilot-Windows-x86_64-Setup.exe
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7

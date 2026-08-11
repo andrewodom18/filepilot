@@ -38,6 +38,10 @@ jobs:
         working-directory: apps/filepilot-desktop
         run: npm ci
 
+      - name: Verify version metadata
+        working-directory: apps/filepilot-desktop
+        run: npm run verify:versions
+
       - name: Install Linux desktop libraries
         if: runner.os == 'Linux'
         run: |
