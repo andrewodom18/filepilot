@@ -9,6 +9,8 @@ use filepilot_core::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::trash_support::move_to_trash;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateCleanupCandidate {
@@ -131,18 +133,19 @@ pub fn cleanup_duplicate_files(
     let mut failed = Vec::new();
 
     for (index, (path, size_bytes)) in prepared.into_iter().enumerate() {
+        context.cancellation.check()?;
         context.report(ProgressEvent {
             phase: "moving selected duplicates to Trash".to_string(),
             completed: index as u64,
             total: Some(total),
             current_path: Some(path.clone()),
             message: Some(
-                "Cancellation is disabled once moving begins; selected files remain recoverable in Trash."
+                "Cancellation is checked before each file; files already moved remain recoverable in Trash."
                     .to_string(),
             ),
         });
 
-        match trash::delete(&path) {
+        match move_to_trash(&path) {
             Ok(()) => moved.push(DuplicateCleanupItem {
                 path,
                 size_bytes,

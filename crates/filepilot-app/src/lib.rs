@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 mod duplicates;
 mod system_data;
+mod trash_support;
 
 pub use duplicates::{
     cleanup_duplicate_files, DuplicateCleanupCandidate, DuplicateCleanupFailure,

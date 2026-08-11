@@ -8,6 +8,8 @@ use std::{
 use chrono::{DateTime, Utc};
 use filepilot_core::{OperationContext, ProgressEvent, Result};
 use serde::{Deserialize, Serialize};
+
+use crate::trash_support::move_to_trash;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -213,7 +215,7 @@ pub fn cleanup_system_data_path(
         current_path: Some(candidate.clone()),
         message: Some("The selected item will remain recoverable in the system Trash.".to_string()),
     });
-    trash::delete(&candidate).map_err(|error| {
+    move_to_trash(&candidate).map_err(|error| {
         filepilot_core::FilePilotError::InvalidInput(format!(
             "could not move {} to Trash: {error}",
             candidate.display()
