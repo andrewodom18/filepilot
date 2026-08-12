@@ -2,7 +2,7 @@
 
 FilePilot is a privacy-first desktop app and CLI for safe file control on macOS, Windows, and Linux. Scan storage, find duplicates, preview renames, organize folders, and clean image metadata without uploading files or requiring an account.
 
-## FilePilot 2.1.1
+## FilePilot 2.1.2
 
 The v2 desktop app is a local-only Tauri application with a React interface. It shares the same Rust core as the CLI and includes:
 
